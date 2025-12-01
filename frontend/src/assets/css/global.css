@@ -1,1 +1,56 @@
-/**/
+@import url(https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&display=swap);
+:root,
+[data-bs-theme="light"] {
+  --bs-sidebar-bg: #fff;
+  --bs-sidebar-menu-item-color: #878a92;
+}
+[data-bs-theme="dark"] {
+  --bs-sidebar-bg: #36404a;
+  --bs-sidebar-menu-item-color: #a6b0cf;
+}
+/*:root,[data-bs-theme=light]{--bs-white-text:#fff;--bs-secondary:#f5f7fb;--bs-body-secondary-color:#7a7f9a;--bs-text-muted:#7a7f9a;--bs-card-logo-dark:block;--bs-card-logo-light:none;--bs-sidebar-bg:#fff;--bs-sidebar-menu-item-color:#878a92;--bs-sidebar-menu-item-active-color:var(--bs-primary);--bs-sidebar-menu-item-active-bg:#f7f7ff;--bs-sidebar-sub-bg:#f5f7fb;--bs-accordion-button-bg:#f5f7fb;--bs-accordion-bg:#fff;--bs-dropdown-bg:#fff}
+
+[data-bs-theme=dark]{--bs-white:#262e35;--bs-white-rgb:38,46,53;--bs-light:#36404a;--bs-light-rgb:54,64,74;--bs-dark:#eff2f7;--bs-dark-rgb:239,242,247;--bs-secondary:#7a7f9a;--bs-secondary-rgb:122,127,154;--bs-text-muted:#9aa1b9;--bs-text-muted-rgb:154,161,185;--bs-sidebar-bg:#36404a;--bs-sidebar-menu-item-color:#a6b0cf;--bs-sidebar-menu-item-active-color:#ffffff;--bs-sidebar-menu-item-active-bg:#3e4a56;--bs-sidebar-sub-bg:#303841;--bs-accordion-button-bg:#36404a;--bs-accordion-bg:transparent;--bs-dropdown-bg:#313a43}*/
+.side-menu {
+  min-width: 75px;
+  max-width: 75px;
+  height: 100vh;
+  min-height: 570px;
+  background-color: var(--bs-sidebar-bg);
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  z-index: 9;
+  -webkit-box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+  box-shadow: 0 2px 4px rgba(15, 34, 58, 0.12);
+}
+.side-menu .navbar-brand-box {
+  text-align: center;
+}
+.side-menu .navbar-brand-box .logo {
+  line-height: 70px;
+}
+.side-menu .navbar-brand-box .logo-dark {
+  display: block;
+}
+.side-menu .navbar-brand-box .logo-light {
+  display: none;
+}
+.side-menu-nav .nav-item {
+  margin: 7px 0;
+}
+.side-menu-nav .nav-item .nav-link {
+  text-align: center;
+  font-size: 24px;
+  color: var(--bs-sidebar-menu-item-color);
+  width: 56px;
+  height: 56px;
+  line-height: 56px;
+  margin: 0 auto;
+  border-radius: 8px;
+  padding: 0;
+}
+.side-menu-nav .nav-item .nav-link.active {
+  background-color: var(--bs-sidebar-bg);
+  color: var(--bs-sidebar-menu-item-color);
+}

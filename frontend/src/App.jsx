@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -9,7 +10,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import './assets/css/global.css';
-/**/
+
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -33,44 +34,46 @@ function App() {
     }
 
     return (
-        <Router>
-            <Routes>
-                <Route
-                    path="/login"
-                    element={
-                        isAuthenticated ? <Navigate to="/chat" /> : <Login setAuth={setIsAuthenticated} />
-                    }
-                />
-                <Route
-                    path="/register"
-                    element={
-                        isAuthenticated ? <Navigate to="/chat" /> : <Register setAuth={setIsAuthenticated} />
-                    }
-                />
-                <Route
-                    path="/forgot-password"
-                    element={
-                        isAuthenticated ? <Navigate to="/chat" /> : <ForgotPassword />
-                    }
-                />
-                <Route
-                    path="/reset-password/:token"
-                    element={
-                        isAuthenticated ? <Navigate to="/chat" /> : <ResetPassword />
-                    }
-                />
-                <Route
-                    path="/chat"
-                    element={
-                        isAuthenticated ? <Chat setAuth={setIsAuthenticated} /> : <Navigate to="/login" />
-                    }
-                />
-                <Route
-                    path="/"
-                    element={<Navigate to={isAuthenticated ? "/chat" : "/login"} />}
-                />
-            </Routes>
-        </Router>
+        <ThemeProvider>
+            <Router>
+                <Routes>
+                    <Route
+                        path="/login"
+                        element={
+                            isAuthenticated ? <Navigate to="/chat" /> : <Login setAuth={setIsAuthenticated} />
+                        }
+                    />
+                    <Route
+                        path="/register"
+                        element={
+                            isAuthenticated ? <Navigate to="/chat" /> : <Register setAuth={setIsAuthenticated} />
+                        }
+                    />
+                    <Route
+                        path="/forgot-password"
+                        element={
+                            isAuthenticated ? <Navigate to="/chat" /> : <ForgotPassword />
+                        }
+                    />
+                    <Route
+                        path="/reset-password/:token"
+                        element={
+                            isAuthenticated ? <Navigate to="/chat" /> : <ResetPassword />
+                        }
+                    />
+                    <Route
+                        path="/chat"
+                        element={
+                            isAuthenticated ? <Chat setAuth={setIsAuthenticated} /> : <Navigate to="/login" />
+                        }
+                    />
+                    <Route
+                        path="/"
+                        element={<Navigate to={isAuthenticated ? "/chat" : "/login"} />}
+                    />
+                </Routes>
+            </Router>
+        </ThemeProvider>
     );
 }
 
