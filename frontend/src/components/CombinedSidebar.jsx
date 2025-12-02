@@ -1,4 +1,4 @@
-function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser, onUserClick }) {
+function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser, onUserClick, connected }) {
     return (
         <div className="combined-sidebar border-start d-none d-lg-flex flex-column" style={{ width: '280px', height: '100vh' }}>
             {/* Секция комнат - 30% */}

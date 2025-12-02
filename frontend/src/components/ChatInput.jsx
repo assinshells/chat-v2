@@ -17,6 +17,10 @@ function ChatInput({
                             <i className="bi bi-reply-fill me-2"></i>
                             Ответ для: <strong>@{selectedUser.nickname}</strong>
                         </span>
+                        <span>
+
+                            написать личное сообщение: <i className="bi bi-chat-dots"></i>{/*вызывает модальное окно отправки приватных сообщений*/}
+                        </span>
                         <button
                             className="btn btn-sm btn-close"
                             onClick={() => setSelectedUser(null)}

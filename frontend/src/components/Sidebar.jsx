@@ -21,7 +21,7 @@ function Sidebar({ user, onLogout }) {
                 </div>
                 <div className="flex-lg-column my-auto">
                     <ul className="nav nav-pills side-menu-nav justify-content-center">
-                        <li className="nav-item">
+                        <li className="nav-item">{/*вызывает модальное окно со списком диалогов приватных сообщений*/}
                             <a
                                 className="nav-link"
                                 data-bs-toggle="modal"
@@ -115,6 +115,47 @@ function Sidebar({ user, onLogout }) {
                                 Закрыть
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Private Modal */}
+            <div class="modal fade messages-modal" id="privateMessagesModal" tabindex="-1" aria-labelledby="messagesModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+
+                        {/* ---------------- HEADER ---------------- */}
+                        <div class="modal-header">
+                            <button id="backBtn" class="btn btn-link p-0 me-2 d-none">
+                                <i class="bi bi-arrow-left fs-4"></i>
+                            </button>
+
+                            <h5 class="modal-title" id="modalTitle">Диалоги</h5>
+
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+
+                        {/* ---------------- DIALOG LIST ---------------- */}
+                        <div id="dialogList" class="modal-body p-0">
+                            <div class="list-group list-group-flush">
+
+                                {/* DYNAMIC DIALOGS */}
+                            </div>
+                        </div>
+
+                        {/* ---------------- CHAT WINDOW ---------------- */}
+                        <div id="chatWindow" class="d-none flex-column" style="height:60vh;">
+
+                            <div class="messages-container flex-grow-1" id="messagesContainer"></div>
+
+                            {/* FOOTER ВВОДА */}
+                            <form id="composeForm" class="px-3 pb-3 pt-2 d-flex gap-2">
+                                <textarea id="messageInput" class="form-control" rows="1"
+                                    placeholder="Написать сообщение..."></textarea>
+                                <button class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+                            </form>
+                        </div>
+
                     </div>
                 </div>
             </div>

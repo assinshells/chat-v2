@@ -1,4 +1,4 @@
-function ChatHeader({ currentRoom, connected, onlineCount, user, onLogout }) {
+function ChatHeader({ currentRoom, connected, onlineCount, user }) {
     return (
         <div className="user-chat w-100 overflow-hidden">
             <div className="d-lg-flex">
