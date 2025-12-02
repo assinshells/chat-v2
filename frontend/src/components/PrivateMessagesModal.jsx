@@ -34,18 +34,20 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
         try {
             setLoading(true);
             const token = localStorage.getItem('chatToken');
-            const response = await axios.get(`${API_URL}/api/messages/${userId}`, {
+            const response = await axios.get(`${API_URL}/api/private-messages/${userId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
+            console.log('📨 Загружено сообщений:', response.data.length);
             setMessages(response.data);
 
             // Отмечаем как прочитанные
-            await axios.post(`${API_URL}/api/messages/mark-read/${userId}`, {}, {
+            await axios.post(`${API_URL}/api/private-messages/mark-read/${userId}`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             // Обновляем список диалогов
-            loadConversations();
+            await loadConversations();
         } catch (error) {
             console.error('Ошибка загрузки сообщений:', error);
         } finally {

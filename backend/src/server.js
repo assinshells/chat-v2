@@ -434,42 +434,46 @@ app.get("/api/conversations", authenticateToken, async (req, res) => {
 });
 
 // Получение истории сообщений с конкретным пользователем
-app.get("/api/messages/:userId", authenticateToken, async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-    const partnerId = req.params.userId;
-    const limit = parseInt(req.query.limit) || 50;
+app.get(
+  "/api/private-messages/:userId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const currentUserId = req.user.id;
+      const partnerId = req.params.userId;
+      const limit = parseInt(req.query.limit) || 50;
 
-    const messages = await PrivateMessage.find({
-      $or: [
-        { fromUserId: currentUserId, toUserId: partnerId },
-        { fromUserId: partnerId, toUserId: currentUserId },
-      ],
-    })
-      .sort({ timestamp: -1 })
-      .limit(limit)
-      .lean();
+      const messages = await PrivateMessage.find({
+        $or: [
+          { fromUserId: currentUserId, toUserId: partnerId },
+          { fromUserId: partnerId, toUserId: currentUserId },
+        ],
+      })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean();
 
-    // Отмечаем полученные сообщения как прочитанные
-    await PrivateMessage.updateMany(
-      {
-        fromUserId: partnerId,
-        toUserId: currentUserId,
-        read: false,
-      },
-      { read: true }
-    );
+      // Отмечаем полученные сообщения как прочитанные
+      await PrivateMessage.updateMany(
+        {
+          fromUserId: partnerId,
+          toUserId: currentUserId,
+          read: false,
+        },
+        { read: true }
+      );
 
-    res.json(messages.reverse());
-  } catch (error) {
-    console.error("Ошибка получения сообщений:", error);
-    res.status(500).json({ error: "Ошибка сервера" });
+      res.json(messages.reverse());
+    } catch (error) {
+      console.error("Ошибка получения сообщений:", error);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
   }
-});
+);
 
 // Отметить сообщения как прочитанные
 app.post(
-  "/api/messages/mark-read/:userId",
+  "/api/private-messages/mark-read/:userId",
   authenticateToken,
   async (req, res) => {
     try {
