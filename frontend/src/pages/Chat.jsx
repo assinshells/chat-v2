@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import ChatHeader from '../components/ChatHeader';
 import MessagesArea from '../components/MessagesArea';
 import ChatInput from '../components/ChatInput';
 import CombinedSidebar from '../components/CombinedSidebar';
+import PrivateMessagesModal from '../components/PrivateMessagesModal';
 import '../assets/css/chat.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
@@ -20,10 +22,26 @@ function Chat({ setAuth }) {
     const [currentRoom, setCurrentRoom] = useState('главная');
     const [rooms, setRooms] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
+    const [showPrivateMessages, setShowPrivateMessages] = useState(false);
+    const [privateMessageUser, setPrivateMessageUser] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const socketRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const navigate = useNavigate();
+
+    // Загрузка счетчика непрочитанных сообщений
+    const loadUnreadCount = async () => {
+        try {
+            const token = localStorage.getItem('chatToken');
+            const response = await axios.get(`${API_URL}/api/unread-count`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setUnreadCount(response.data.unreadCount);
+        } catch (error) {
+            console.error('Ошибка загрузки счетчика:', error);
+        }
+    };
 
     useEffect(() => {
         const storedUser = localStorage.getItem('chatUser');
@@ -37,6 +55,9 @@ function Chat({ setAuth }) {
 
         setUser(JSON.parse(storedUser));
         setCurrentRoom(selectedRoom);
+
+        // Загрузка счетчика непрочитанных
+        loadUnreadCount();
 
         // Загрузка списка комнат
         const fetchRooms = async () => {
@@ -119,6 +140,17 @@ function Chat({ setAuth }) {
             }
         });
 
+        // Обработка приватных сообщений
+        socket.on('private_message', (message) => {
+            console.log('📩 Chat.jsx получил приватное сообщение:', message);
+            loadUnreadCount();
+        });
+
+        socket.on('unread_count_update', () => {
+            console.log('🔔 Chat.jsx получил обновление счетчика');
+            loadUnreadCount();
+        });
+
         socket.on('disconnect', () => {
             console.log('❌ Отключено от сервера');
             setConnected(false);
@@ -141,14 +173,12 @@ function Chat({ setAuth }) {
             return;
         }
 
+        // Обычное сообщение в комнату (может быть с упоминанием пользователя)
         const messageData = {
-            text: inputMessage.trim()
+            text: selectedUser
+                ? `@${selectedUser.nickname} ${inputMessage.trim()}`
+                : inputMessage.trim()
         };
-
-        if (selectedUser) {
-            messageData.toUserId = selectedUser.userId;
-            messageData.toNickname = selectedUser.nickname;
-        }
 
         socketRef.current.emit('send_message', messageData);
         setInputMessage('');
@@ -177,6 +207,12 @@ function Chat({ setAuth }) {
         });
     };
 
+    const handleOpenPrivateMessage = (targetUser) => {
+        setPrivateMessageUser(targetUser);
+        setShowPrivateMessages(true);
+        setSelectedUser(null);
+    };
+
     const handleTimeClick = (timestamp) => {
         const date = new Date(timestamp);
         const timeStr = date.toLocaleTimeString('ru-RU', {
@@ -197,6 +233,17 @@ function Chat({ setAuth }) {
         navigate('/login');
     };
 
+    const handleOpenPrivateMessages = () => {
+        setPrivateMessageUser(null);
+        setShowPrivateMessages(true);
+    };
+
+    const handleClosePrivateMessages = () => {
+        setShowPrivateMessages(false);
+        setPrivateMessageUser(null);
+        loadUnreadCount();
+    };
+
     const getCurrentRoomUsers = () => {
         const room = rooms.find(r => r.name === currentRoom);
         return room ? room.users : [];
@@ -213,50 +260,68 @@ function Chat({ setAuth }) {
     }
 
     return (
-        <div className="layout-wrapper d-lg-flex">
-            <Sidebar user={user} onLogout={handleLogout} />
-
-            <div className="user-chat w-100 overflow-hidden">
-                <ChatHeader
-                    currentRoom={currentRoom}
-                    connected={connected}
-                    onlineCount={getCurrentRoomUsers().length}
+        <>
+            <div className="layout-wrapper d-lg-flex">
+                <Sidebar
                     user={user}
                     onLogout={handleLogout}
+                    unreadCount={unreadCount}
+                    onOpenPrivateMessages={handleOpenPrivateMessages}
                 />
 
-                <div className="d-flex flex-grow-1" style={{ overflow: 'hidden' }}>
-                    <MessagesArea
-                        messages={messages}
-                        typing={typing}
+                <div className="user-chat w-100 overflow-hidden">
+                    <ChatHeader
+                        currentRoom={currentRoom}
+                        connected={connected}
+                        onlineCount={getCurrentRoomUsers().length}
                         user={user}
-                        onUserClick={handleUserClick}
-                        onTimeClick={handleTimeClick}
+                        onLogout={handleLogout}
+                    />
+
+                    <div className="d-flex flex-grow-1" style={{ overflow: 'hidden' }}>
+                        <MessagesArea
+                            messages={messages}
+                            typing={typing}
+                            user={user}
+                            onUserClick={handleUserClick}
+                            onTimeClick={handleTimeClick}
+                        />
+                    </div>
+
+                    <ChatInput
+                        inputMessage={inputMessage}
+                        setInputMessage={setInputMessage}
+                        selectedUser={selectedUser}
+                        setSelectedUser={setSelectedUser}
+                        connected={connected}
+                        currentRoom={currentRoom}
+                        onSendMessage={handleSendMessage}
+                        onInputChange={handleInputChange}
+                        onOpenPrivateMessage={handleOpenPrivateMessage}
                     />
                 </div>
 
-                <ChatInput
-                    inputMessage={inputMessage}
-                    setInputMessage={setInputMessage}
-                    selectedUser={selectedUser}
-                    setSelectedUser={setSelectedUser}
-                    connected={connected}
+                <CombinedSidebar
+                    rooms={rooms}
                     currentRoom={currentRoom}
-                    onSendMessage={handleSendMessage}
-                    onInputChange={handleInputChange}
+                    onRoomChange={handleRoomChange}
+                    users={getCurrentRoomUsers()}
+                    currentUser={user}
+                    onUserClick={handleUserClick}
                 />
             </div>
 
-            {/* Объединенный сайдбар для комнат и пользователей */}
-            <CombinedSidebar
-                rooms={rooms}
-                currentRoom={currentRoom}
-                onRoomChange={handleRoomChange}
-                users={getCurrentRoomUsers()}
-                currentUser={user}
-                onUserClick={handleUserClick}
-            />
-        </div>
+            {/* Модальное окно приватных сообщений */}
+            {showPrivateMessages && (
+                <PrivateMessagesModal
+                    show={showPrivateMessages}
+                    onHide={handleClosePrivateMessages}
+                    socket={socketRef.current}
+                    user={user}
+                    initialUser={privateMessageUser}
+                />
+            )}
+        </>
     );
 }
 

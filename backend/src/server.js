@@ -68,9 +68,28 @@ const roomSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+const privateMessageSchema = new mongoose.Schema({
+  fromUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  fromNickname: { type: String, required: true },
+  toUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  toNickname: { type: String, required: true },
+  text: { type: String, required: true },
+  read: { type: Boolean, default: false },
+  timestamp: { type: Date, default: Date.now },
+});
+
 const User = mongoose.model("User", userSchema);
 const Message = mongoose.model("Message", messageSchema);
 const Room = mongoose.model("Room", roomSchema);
+const PrivateMessage = mongoose.model("PrivateMessage", privateMessageSchema);
 
 // JWT Secret
 const JWT_SECRET =
@@ -364,6 +383,137 @@ app.get("/api/user", authenticateToken, async (req, res) => {
   }
 });
 
+// Получение списка диалогов
+app.get("/api/conversations", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Получаем все приватные сообщения пользователя
+    const messages = await PrivateMessage.find({
+      $or: [{ fromUserId: userId }, { toUserId: userId }],
+    }).sort({ timestamp: -1 });
+
+    // Группируем по собеседникам
+    const conversationsMap = new Map();
+
+    for (const msg of messages) {
+      const isFromMe = msg.fromUserId.toString() === userId;
+      const partnerId = isFromMe
+        ? msg.toUserId.toString()
+        : msg.fromUserId.toString();
+      const partnerNickname = isFromMe ? msg.toNickname : msg.fromNickname;
+
+      if (!conversationsMap.has(partnerId)) {
+        // Подсчитываем непрочитанные сообщения
+        const unreadCount = await PrivateMessage.countDocuments({
+          toUserId: userId,
+          fromUserId: partnerId,
+          read: false,
+        });
+
+        conversationsMap.set(partnerId, {
+          userId: partnerId,
+          nickname: partnerNickname,
+          lastMessage: msg.text,
+          lastMessageTime: msg.timestamp,
+          unreadCount,
+          lastMessageFromMe: isFromMe,
+        });
+      }
+    }
+
+    const conversations = Array.from(conversationsMap.values()).sort(
+      (a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
+    );
+
+    res.json(conversations);
+  } catch (error) {
+    console.error("Ошибка получения диалогов:", error);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// Получение истории сообщений с конкретным пользователем
+app.get("/api/messages/:userId", authenticateToken, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const partnerId = req.params.userId;
+    const limit = parseInt(req.query.limit) || 50;
+
+    const messages = await PrivateMessage.find({
+      $or: [
+        { fromUserId: currentUserId, toUserId: partnerId },
+        { fromUserId: partnerId, toUserId: currentUserId },
+      ],
+    })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
+
+    // Отмечаем полученные сообщения как прочитанные
+    await PrivateMessage.updateMany(
+      {
+        fromUserId: partnerId,
+        toUserId: currentUserId,
+        read: false,
+      },
+      { read: true }
+    );
+
+    res.json(messages.reverse());
+  } catch (error) {
+    console.error("Ошибка получения сообщений:", error);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// Отметить сообщения как прочитанные
+app.post(
+  "/api/messages/mark-read/:userId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const currentUserId = req.user.id;
+      const partnerId = req.params.userId;
+
+      const result = await PrivateMessage.updateMany(
+        {
+          fromUserId: partnerId,
+          toUserId: currentUserId,
+          read: false,
+        },
+        { read: true }
+      );
+
+      console.log(
+        `✅ Отмечено как прочитано: ${result.modifiedCount} сообщений`
+      );
+
+      res.json({ success: true, modifiedCount: result.modifiedCount });
+    } catch (error) {
+      console.error("Ошибка отметки сообщений:", error);
+      res.status(500).json({ error: "Ошибка сервера" });
+    }
+  }
+);
+
+// Получение количества непрочитанных сообщений
+app.get("/api/unread-count", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const unreadCount = await PrivateMessage.countDocuments({
+      toUserId: userId,
+      read: false,
+    });
+
+    res.json({ unreadCount });
+  } catch (error) {
+    console.error("Ошибка получения счетчика:", error);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -563,30 +713,85 @@ io.on("connection", (socket) => {
     }
 
     try {
-      const message = new Message({
-        userId: socket.userId,
-        nickname: socket.nickname,
-        text: messageData.text,
-        room: socket.currentRoom,
-        toUserId: messageData.toUserId || null,
-        toNickname: messageData.toNickname || null,
-      });
+      // Если это приватное сообщение
+      if (messageData.toUserId && messageData.toNickname) {
+        console.log("📧 Отправка приватного сообщения:", {
+          from: socket.nickname,
+          to: messageData.toNickname,
+          text: messageData.text,
+        });
 
-      await message.save();
+        const privateMsg = new PrivateMessage({
+          fromUserId: socket.userId,
+          fromNickname: socket.nickname,
+          toUserId: messageData.toUserId,
+          toNickname: messageData.toNickname,
+          text: messageData.text,
+        });
 
-      // Broadcast в текущую комнату
-      io.to(socket.currentRoom).emit("new_message", {
-        id: message._id,
-        userId: message.userId,
-        nickname: message.nickname,
-        text: message.text,
-        room: message.room,
-        toUserId: message.toUserId,
-        toNickname: message.toNickname,
-        timestamp: message.timestamp,
-      });
+        await privateMsg.save();
+
+        const messagePayload = {
+          id: privateMsg._id.toString(),
+          fromUserId: privateMsg.fromUserId.toString(),
+          fromNickname: privateMsg.fromNickname,
+          toUserId: privateMsg.toUserId.toString(),
+          toNickname: privateMsg.toNickname,
+          text: privateMsg.text,
+          read: privateMsg.read,
+          timestamp: privateMsg.timestamp,
+        };
+
+        // Отправляем отправителю
+        socket.emit("private_message", messagePayload);
+        console.log("✅ Отправлено отправителю:", socket.nickname);
+
+        // Находим всех получателей (могут быть несколько сокетов одного пользователя)
+        const recipientSockets = [];
+        for (const [socketId, userData] of connectedUsers.entries()) {
+          if (userData.userId === messageData.toUserId) {
+            recipientSockets.push(socketId);
+          }
+        }
+
+        console.log(
+          `📤 Найдено сокетов получателя (${messageData.toNickname}):`,
+          recipientSockets.length
+        );
+
+        // Отправляем всем сокетам получателя
+        recipientSockets.forEach((recipientSocketId) => {
+          io.to(recipientSocketId).emit("private_message", messagePayload);
+          io.to(recipientSocketId).emit("unread_count_update");
+          console.log("✅ Отправлено получателю:", recipientSocketId);
+        });
+
+        // Если получатель не онлайн, все равно сохраняем сообщение
+        if (recipientSockets.length === 0) {
+          console.log("⚠️ Получатель оффлайн, сообщение сохранено в БД");
+        }
+      } else {
+        // Обычное сообщение в комнату
+        const message = new Message({
+          userId: socket.userId,
+          nickname: socket.nickname,
+          text: messageData.text,
+          room: socket.currentRoom,
+        });
+
+        await message.save();
+
+        io.to(socket.currentRoom).emit("new_message", {
+          id: message._id,
+          userId: message.userId,
+          nickname: message.nickname,
+          text: message.text,
+          room: message.room,
+          timestamp: message.timestamp,
+        });
+      }
     } catch (error) {
-      console.error("Ошибка отправки сообщения:", error);
+      console.error("❌ Ошибка отправки сообщения:", error);
       socket.emit("error", "Ошибка отправки сообщения");
     }
   });

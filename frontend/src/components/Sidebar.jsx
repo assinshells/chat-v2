@@ -1,7 +1,7 @@
 import { useTheme } from '../context/ThemeContext';
 import reactLogo from '../assets/react.svg';
 
-function Sidebar({ user, onLogout }) {
+function Sidebar({ user, onLogout, unreadCount, onOpenPrivateMessages }) {
     const { theme, toggleTheme } = useTheme();
 
     return (
@@ -21,15 +21,23 @@ function Sidebar({ user, onLogout }) {
                 </div>
                 <div className="flex-lg-column my-auto">
                     <ul className="nav nav-pills side-menu-nav justify-content-center">
-                        <li className="nav-item">{/*вызывает модальное окно со списком диалогов приватных сообщений*/}
+                        <li className="nav-item position-relative">
                             <a
                                 className="nav-link"
-                                data-bs-toggle="modal"
-                                data-bs-target="#privateMessagesModal"
+                                onClick={onOpenPrivateMessages}
                                 href="#"
-                                title="Приватные сообщения"
+                                title="Личные сообщения"
+                                style={{ cursor: 'pointer' }}
                             >
                                 <i className="bi bi-chat-dots"></i>
+                                {unreadCount > 0 && (
+                                    <span
+                                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                        style={{ fontSize: '0.65rem' }}
+                                    >
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </span>
+                                )}
                             </a>
                         </li>
                         <li className="nav-item">
@@ -109,53 +117,27 @@ function Sidebar({ user, onLogout }) {
                                     </p>
                                 )}
                             </div>
+
+                            <hr />
+
+                            <div className="mb-3">
+                                <h6 className="mb-2">
+                                    <i className="bi bi-chat-dots me-2"></i>
+                                    Личные сообщения
+                                </h6>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <span>Непрочитанных сообщений:</span>
+                                    <span className={`badge ${unreadCount > 0 ? 'bg-danger' : 'bg-secondary'}`}>
+                                        {unreadCount}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                         <div className="modal-footer">
                             <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">
                                 Закрыть
                             </button>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Private Modal */}
-            <div class="modal fade messages-modal" id="privateMessagesModal" tabindex="-1" aria-labelledby="messagesModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-
-                        {/* ---------------- HEADER ---------------- */}
-                        <div class="modal-header">
-                            <button id="backBtn" class="btn btn-link p-0 me-2 d-none">
-                                <i class="bi bi-arrow-left fs-4"></i>
-                            </button>
-
-                            <h5 class="modal-title" id="modalTitle">Диалоги</h5>
-
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-
-                        {/* ---------------- DIALOG LIST ---------------- */}
-                        <div id="dialogList" class="modal-body p-0">
-                            <div class="list-group list-group-flush">
-
-                                {/* DYNAMIC DIALOGS */}
-                            </div>
-                        </div>
-
-                        {/* ---------------- CHAT WINDOW ---------------- */}
-                        <div id="chatWindow" class="d-none flex-column" style="height:60vh;">
-
-                            <div class="messages-container flex-grow-1" id="messagesContainer"></div>
-
-                            {/* FOOTER ВВОДА */}
-                            <form id="composeForm" class="px-3 pb-3 pt-2 d-flex gap-2">
-                                <textarea id="messageInput" class="form-control" rows="1"
-                                    placeholder="Написать сообщение..."></textarea>
-                                <button class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
-                            </form>
-                        </div>
-
                     </div>
                 </div>
             </div>
