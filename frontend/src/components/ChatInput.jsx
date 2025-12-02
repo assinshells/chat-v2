@@ -21,8 +21,6 @@ function ChatInput({
                             className="btn btn-sm btn-close"
                             onClick={() => setSelectedUser(null)}
                             aria-label="Отменить"
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="top"
                             title="Отменить ответ"
                         ></button>
                     </div>
@@ -46,8 +44,6 @@ function ChatInput({
                             className="btn btn-primary px-4"
                             type="submit"
                             disabled={!connected || !inputMessage.trim()}
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="top"
                             title={selectedUser ? 'Отправить личное сообщение' : 'Отправить в чат'}
                         >
                             {selectedUser ? (

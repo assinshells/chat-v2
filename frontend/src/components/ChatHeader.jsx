@@ -11,10 +11,15 @@ function ChatHeader({ currentRoom, connected, onlineCount, user, onLogout }) {
                                         <h5 className="font-size-16 mb-0 text-truncate"><a href="#" className="text-reset user-profile-show">
                                             <i className="bi bi-person-circle me-1"></i>
                                             {user.nickname}
-                                        </a><span className={`badge ms-3 ${connected ? 'bg-success' : 'bg-danger'}`}>
-                                                <i className={`bi bi-circle-fill me-1`} style={{ fontSize: '0.5rem' }}></i>
-                                                {connected ? 'Онлайн' : 'Офлайн'}
-                                            </span></h5>
+                                        </a><i
+                                            className="bi bi-circle-fill ms-3"
+                                            title={connected ? "Онлайн" : "Офлайн"}
+                                            style={{
+                                                fontSize: "0.55rem",
+                                                color: connected ? "var(--bs-success)" : "var(--bs-danger)",
+                                                cursor: "pointer"
+                                            }}
+                                        ></i></h5>
 
                                         <h5 className="mb-0">
                                             <i className="bi bi-hash"></i> {currentRoom}

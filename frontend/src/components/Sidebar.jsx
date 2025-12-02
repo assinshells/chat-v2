@@ -1,77 +1,124 @@
-import { useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import * as bootstrap from 'bootstrap';
 import reactLogo from '../assets/react.svg';
 
 function Sidebar({ user, onLogout }) {
     const { theme, toggleTheme } = useTheme();
 
-    useEffect(() => {
-        // Инициализация tooltips
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        const tooltips = [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
-
-        return () => {
-            tooltips.forEach(tooltip => tooltip.dispose());
-        };
-    }, []);
-
     return (
-        <div className="side-menu flex-lg-column me-lg-1 ms-lg-0">
-            <div className="navbar-brand-box">
-                <a href="#" className="logo logo-dark">
-                    <span className="logo-sm">
-                        <img src={reactLogo} alt="Logo" height="30" />
-                    </span>
-                </a>
-                <a href="#" className="logo logo-light">
-                    <span className="logo-sm">
-                        <img src={reactLogo} alt="Logo" height="30" />
-                    </span>
-                </a>
+        <>
+            <div className="side-menu flex-lg-column me-lg-1 ms-lg-0">
+                <div className="navbar-brand-box">
+                    <a href="#" className="logo logo-dark">
+                        <span className="logo-sm">
+                            <img src={reactLogo} alt="Logo" height="30" />
+                        </span>
+                    </a>
+                    <a href="#" className="logo logo-light">
+                        <span className="logo-sm">
+                            <img src={reactLogo} alt="Logo" height="30" />
+                        </span>
+                    </a>
+                </div>
+                <div className="flex-lg-column my-auto">
+                    <ul className="nav nav-pills side-menu-nav justify-content-center">
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                data-bs-toggle="modal"
+                                data-bs-target="#privateMessagesModal"
+                                href="#"
+                                title="Приватные сообщения"
+                            >
+                                <i className="bi bi-chat-dots"></i>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                data-bs-toggle="modal"
+                                data-bs-target="#settingsModal"
+                                href="#"
+                                title="Настройки"
+                            >
+                                <i className="bi bi-gear"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div className="flex-lg-column d-none d-lg-block">
+                    <ul className="nav side-menu-nav justify-content-center">
+                        <li className="nav-item">
+                            <a
+                                className="nav-link"
+                                href="#"
+                                onClick={onLogout}
+                                title="Выход из чата"
+                            >
+                                <i className="bi bi-box-arrow-right"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
-            <div className="flex-lg-column my-auto">
-                <ul className="nav nav-pills side-menu-nav justify-content-center" role="">
-                    <li className="nav-item" data-bs-toggle="tooltip" data-bs-placement="right" title="Настройки">
-                        <a className="nav-link" id="" data-bs-toggle="" href="#" role="">
-                            <i className="bi bi-gear"></i>
-                        </a>
-                    </li>
-                </ul>
+
+            {/* Settings Modal */}
+            <div className="modal fade" id="settingsModal" tabIndex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+                <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h5 className="modal-title" id="settingsModalLabel">
+                                <i className="bi bi-gear me-2"></i>
+                                Настройки
+                            </h5>
+                            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                <div>
+                                    <h6 className="mb-1">Тема оформления</h6>
+                                    <small className="text-muted">
+                                        {theme === 'light' ? 'Светлая тема' : 'Темная тема'}
+                                    </small>
+                                </div>
+                                <div className="form-check form-switch">
+                                    <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        role="switch"
+                                        id="themeSwitch"
+                                        checked={theme === 'dark'}
+                                        onChange={toggleTheme}
+                                        style={{ cursor: 'pointer', width: '50px', height: '25px' }}
+                                    />
+                                    <label className="form-check-label ms-2" htmlFor="themeSwitch">
+                                        <i className={`bi bi-${theme === 'light' ? 'moon-stars' : 'brightness-high'}`}></i>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <div className="mb-3">
+                                <h6 className="mb-2">Информация о пользователе</h6>
+                                <p className="mb-1">
+                                    <strong>Никнейм:</strong> {user.nickname}
+                                </p>
+                                {user.email && (
+                                    <p className="mb-1">
+                                        <strong>Email:</strong> {user.email}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">
+                                Закрыть
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div className="flex-lg-column d-none d-lg-block">
-                <ul className="nav side-menu-nav justify-content-center">
-                    <li className="nav-item">
-                        <a
-                            className="nav-link light-dark-mode"
-                            href="#"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                toggleTheme();
-                            }}
-                            data-bs-toggle="tooltip"
-                            data-bs-trigger="hover"
-                            data-bs-placement="right"
-                            title="Dark / Light Mode"
-                        >
-                            <i className={`bi bi-${theme === 'light' ? 'moon-stars' : 'brightness-high'} theme-mode-icon`}></i>
-                        </a>
-                    </li>
-                    <li className="nav-item">
-                        <a
-                            className="nav-link"
-                            href="#"
-                            onClick={onLogout}
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="right"
-                            title="Выход из чата"
-                        >
-                            <i className="bi bi-box-arrow-right"></i>
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
+        </>
     );
 }
 

@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import * as bootstrap from 'bootstrap';
 import Sidebar from '../components/Sidebar';
 import ChatHeader from '../components/ChatHeader';
 import MessagesArea from '../components/MessagesArea';
 import ChatInput from '../components/ChatInput';
-import RoomsList from '../components/RoomsList';
-import UsersSidebar from '../components/UsersSidebar';
+import CombinedSidebar from '../components/CombinedSidebar';
 import '../assets/css/chat.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
@@ -100,6 +98,7 @@ function Chat({ setAuth }) {
             setCurrentRoom(data.room);
             setMessages(data.messages);
             setSelectedUser(null);
+            localStorage.setItem('selectedRoom', data.room);
         });
 
         socket.on('rooms_update', (roomsData) => {
@@ -124,14 +123,6 @@ function Chat({ setAuth }) {
             console.log('❌ Отключено от сервера');
             setConnected(false);
         });
-
-        // Инициализация всех tooltips
-        const initTooltips = () => {
-            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
-        };
-
-        initTooltips();
 
         return () => {
             if (socket) {
@@ -224,6 +215,7 @@ function Chat({ setAuth }) {
     return (
         <div className="layout-wrapper d-lg-flex">
             <Sidebar user={user} onLogout={handleLogout} />
+
             <div className="user-chat w-100 overflow-hidden">
                 <ChatHeader
                     currentRoom={currentRoom}
@@ -254,14 +246,12 @@ function Chat({ setAuth }) {
                     onInputChange={handleInputChange}
                 />
             </div>
-            {/* Список комнат */}
-            <RoomsList
+
+            {/* Объединенный сайдбар для комнат и пользователей */}
+            <CombinedSidebar
                 rooms={rooms}
                 currentRoom={currentRoom}
                 onRoomChange={handleRoomChange}
-            />
-            {/* Список пользователей */}
-            <UsersSidebar
                 users={getCurrentRoomUsers()}
                 currentUser={user}
                 onUserClick={handleUserClick}

@@ -1,17 +1,4 @@
-import { useEffect } from 'react';
-import * as bootstrap from 'bootstrap';
-
 function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
-    useEffect(() => {
-        // Инициализация tooltips для сообщения
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        const tooltips = [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
-
-        return () => {
-            tooltips.forEach(tooltip => tooltip.dispose());
-        };
-    }, []);
-
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
         return date.toLocaleTimeString('ru-RU', {
@@ -29,8 +16,6 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                         <span
                             className="message-time text-muted me-2"
                             onClick={() => onTimeClick(message.timestamp)}
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="top"
                             title="Кликните, чтобы вставить время"
                             style={{
                                 cursor: 'pointer',
@@ -49,8 +34,6 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                                     onUserClick({ userId: message.userId, nickname: message.nickname });
                                 }
                             }}
-                            data-bs-toggle="tooltip"
-                            data-bs-placement="top"
                             title={!isOwnMessage ? 'Кликните, чтобы ответить' : 'Вы'}
                             style={{
                                 cursor: !isOwnMessage ? 'pointer' : 'default',
@@ -67,8 +50,6 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                             <span
                                 className="text-primary me-2"
                                 style={{ fontSize: '0.9rem' }}
-                                data-bs-toggle="tooltip"
-                                data-bs-placement="top"
                                 title={`Ответ для ${message.toNickname}`}
                             >
                                 <i className="bi bi-arrow-right-short"></i>
@@ -84,7 +65,6 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                 </div>
             </li>
         </ul>
-
     );
 }
 
