@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -10,36 +10,56 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
     const [inputMessage, setInputMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [totalUnread, setTotalUnread] = useState(0);
+
     const messagesEndRef = useRef(null);
+    const messageIdsRef = useRef(new Set()); // Кэш ID сообщений
+    const isLoadingRef = useRef(false); // Флаг загрузки
 
     // Загрузка списка диалогов
-    const loadConversations = async () => {
+    const loadConversations = useCallback(async () => {
         try {
             const token = localStorage.getItem('chatToken');
+            if (!token) return;
+
             const response = await axios.get(`${API_URL}/api/conversations`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setConversations(response.data);
 
-            // Подсчитываем общее количество непрочитанных
+            setConversations(response.data);
             const total = response.data.reduce((sum, conv) => sum + conv.unreadCount, 0);
             setTotalUnread(total);
         } catch (error) {
             console.error('Ошибка загрузки диалогов:', error);
         }
-    };
+    }, []);
 
     // Загрузка сообщений с выбранным пользователем
-    const loadMessages = async (userId) => {
+    const loadMessages = useCallback(async (userId) => {
+        if (isLoadingRef.current) {
+            console.warn('⚠️ Загрузка уже выполняется');
+            return;
+        }
+
         try {
+            isLoadingRef.current = true;
             setLoading(true);
+
             const token = localStorage.getItem('chatToken');
             const response = await axios.get(`${API_URL}/api/private-messages/${userId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             console.log('📨 Загружено сообщений:', response.data.length);
+
+            // Сброс кэша и установка новых сообщений
+            messageIdsRef.current.clear();
             setMessages(response.data);
+
+            // Заполнение кэша ID
+            response.data.forEach(msg => {
+                const msgId = msg.id || msg._id;
+                if (msgId) messageIdsRef.current.add(msgId);
+            });
 
             // Отмечаем как прочитанные
             await axios.post(`${API_URL}/api/private-messages/mark-read/${userId}`, {}, {
@@ -52,17 +72,18 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
             console.error('Ошибка загрузки сообщений:', error);
         } finally {
             setLoading(false);
+            isLoadingRef.current = false;
         }
-    };
+    }, [loadConversations]);
 
     // Выбор диалога
-    const handleSelectConversation = (conversation) => {
+    const handleSelectConversation = useCallback((conversation) => {
         setSelectedConversation(conversation);
         loadMessages(conversation.userId);
-    };
+    }, [loadMessages]);
 
     // Отправка сообщения
-    const handleSendMessage = (e) => {
+    const handleSendMessage = useCallback((e) => {
         e.preventDefault();
 
         if (!inputMessage.trim() || !socket || !selectedConversation) {
@@ -76,42 +97,49 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
         });
 
         setInputMessage('');
-    };
+    }, [inputMessage, socket, selectedConversation]);
 
     // Прокрутка к последнему сообщению
-    const scrollToBottom = () => {
+    const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
+    }, []);
 
     // Автоматический выбор диалога при передаче initialUser
     useEffect(() => {
-        if (show && initialUser) {
-            console.log('🎯 Открытие диалога с пользователем:', initialUser);
-            // Загружаем диалоги и выбираем нужный
-            loadConversations().then(() => {
-                // Небольшая задержка для загрузки данных
-                setTimeout(() => {
-                    // Создаем или выбираем диалог
-                    setSelectedConversation({
-                        userId: initialUser.userId,
-                        nickname: initialUser.nickname,
-                        unreadCount: 0
-                    });
-                    // Загружаем сообщения
-                    loadMessages(initialUser.userId);
-                }, 100);
-            });
-        } else if (show) {
-            loadConversations();
-        }
-    }, [show, initialUser]);
+        if (!show) return;
 
+        loadConversations();
+
+        if (initialUser) {
+            console.log('🎯 Открытие диалога с пользователем:', initialUser);
+
+            const timer = setTimeout(() => {
+                setSelectedConversation({
+                    userId: initialUser.userId,
+                    nickname: initialUser.nickname,
+                    unreadCount: 0
+                });
+                loadMessages(initialUser.userId);
+            }, 100);
+
+            return () => clearTimeout(timer);
+        }
+    }, [show, initialUser, loadConversations, loadMessages]);
+
+    // Обработка входящих сообщений через Socket.IO
     useEffect(() => {
         if (!socket) return;
 
-        // Получение нового приватного сообщения
         const handlePrivateMessage = (message) => {
             console.log('📩 Получено приватное сообщение:', message);
+
+            const messageId = message.id || message._id;
+
+            // Предотвращение дублирования
+            if (messageId && messageIdsRef.current.has(messageId)) {
+                console.warn('⚠️ Дублирующееся сообщение:', messageId);
+                return;
+            }
 
             // Если это сообщение для текущего диалога
             if (selectedConversation) {
@@ -121,22 +149,19 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
                     (message.fromUserId === user.id && message.toUserId === selectedConversation.userId);
 
                 if (isRelevant) {
-                    console.log('✅ Сообщение относится к текущему диалогу, добавляем');
-                    setMessages(prev => {
-                        // Проверяем, нет ли уже этого сообщения
-                        const exists = prev.some(m => m.id === message.id || m._id === message.id);
-                        if (exists) {
-                            console.log('⚠️ Сообщение уже есть, пропускаем');
-                            return prev;
-                        }
-                        return [...prev, message];
-                    });
+                    console.log('✅ Сообщение относится к текущему диалогу');
+                    setMessages(prev => [...prev, message]);
+
+                    if (messageId) {
+                        messageIdsRef.current.add(messageId);
+                    }
+
                     scrollToBottom();
 
-                    // Отмечаем как прочитанное если диалог открыт и сообщение не от нас
+                    // Отмечаем как прочитанное, если сообщение не от нас
                     if (message.fromUserId === selectedConversation.userId) {
                         const token = localStorage.getItem('chatToken');
-                        axios.post(`${API_URL}/api/messages/mark-read/${selectedConversation.userId}`, {}, {
+                        axios.post(`${API_URL}/api/private-messages/mark-read/${selectedConversation.userId}`, {}, {
                             headers: { Authorization: `Bearer ${token}` }
                         }).catch(err => console.error('Ошибка отметки прочитанного:', err));
                     }
@@ -147,7 +172,6 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
             loadConversations();
         };
 
-        // Обновление счетчика непрочитанных
         const handleUnreadUpdate = () => {
             console.log('🔔 Обновление счетчика непрочитанных');
             loadConversations();
@@ -160,11 +184,12 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
             socket.off('private_message', handlePrivateMessage);
             socket.off('unread_count_update', handleUnreadUpdate);
         };
-    }, [socket, selectedConversation, user]);
+    }, [socket, selectedConversation, user, loadConversations, scrollToBottom]);
 
+    // Автопрокрутка при изменении сообщений
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, scrollToBottom]);
 
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
@@ -189,8 +214,10 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
         }
     };
 
+    if (!show) return null;
+
     return (
-        <div className={`modal fade ${show ? 'show d-block' : ''}`} tabIndex="-1" style={{ backgroundColor: show ? 'rgba(0,0,0,0.5)' : 'transparent' }}>
+        <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
             <div className="modal-dialog modal-dialog-centered modal-lg" style={{ maxWidth: '900px' }}>
                 <div className="modal-content" style={{ height: '600px' }}>
                     <div className="modal-header">
@@ -258,7 +285,6 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
                             <div className="col-8 d-flex flex-column" style={{ height: '100%' }}>
                                 {selectedConversation ? (
                                     <>
-                                        {/* Заголовок диалога */}
                                         <div className="p-3 border-bottom">
                                             <h6 className="mb-0">
                                                 <i className="bi bi-person-circle me-2"></i>
@@ -266,7 +292,6 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
                                             </h6>
                                         </div>
 
-                                        {/* Сообщения */}
                                         <div className="flex-grow-1 p-3" style={{ overflowY: 'auto', maxHeight: 'calc(100% - 140px)' }}>
                                             {loading ? (
                                                 <div className="text-center mt-5">
@@ -286,7 +311,7 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
                                                         new Date(messages[index - 1].timestamp).toDateString() !== new Date(msg.timestamp).toDateString();
 
                                                     return (
-                                                        <div key={msg.id || msg._id}>
+                                                        <div key={msg.id || msg._id || `msg-${index}`}>
                                                             {showDate && (
                                                                 <div className="text-center text-muted my-3">
                                                                     <small>{formatDate(msg.timestamp)}</small>
@@ -312,7 +337,6 @@ function PrivateMessagesModal({ show, onHide, socket, user, initialUser }) {
                                             <div ref={messagesEndRef} />
                                         </div>
 
-                                        {/* Ввод сообщения */}
                                         <div className="p-3 border-top">
                                             <form onSubmit={handleSendMessage}>
                                                 <div className="input-group">

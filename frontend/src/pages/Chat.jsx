@@ -1,14 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import Sidebar from '../components/Sidebar';
-import ChatHeader from '../components/ChatHeader';
-import MessagesArea from '../components/MessagesArea';
-import ChatInput from '../components/ChatInput';
-import CombinedSidebar from '../components/CombinedSidebar';
-import PrivateMessagesModal from '../components/PrivateMessagesModal';
-import '../assets/css/chat.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:5000';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -29,12 +22,15 @@ function Chat({ setAuth }) {
 
     const socketRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+    const messageIdsRef = useRef(new Set()); // Отслеживание ID сообщений
     const navigate = useNavigate();
 
-    // Загрузка счетчика непрочитанных сообщений
-    const loadUnreadCount = async () => {
+    // Мемоизированная загрузка непрочитанных
+    const loadUnreadCount = useCallback(async () => {
         try {
             const token = localStorage.getItem('chatToken');
+            if (!token) return;
+
             const response = await axios.get(`${API_URL}/api/unread-count`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -42,8 +38,21 @@ function Chat({ setAuth }) {
         } catch (error) {
             console.error('Ошибка загрузки счетчика:', error);
         }
-    };
+    }, []);
 
+    // Выход из системы
+    const handleLogout = useCallback(() => {
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+        }
+        localStorage.removeItem('chatToken');
+        localStorage.removeItem('chatUser');
+        localStorage.removeItem('selectedRoom');
+        setAuth(false);
+        navigate('/login');
+    }, [setAuth, navigate]);
+
+    // Инициализация пользователя и комнат
     useEffect(() => {
         const storedUser = localStorage.getItem('chatUser');
         const token = localStorage.getItem('chatToken');
@@ -56,46 +65,47 @@ function Chat({ setAuth }) {
 
         setUser(JSON.parse(storedUser));
         setCurrentRoom(selectedRoom);
-
-        // Загрузка счетчика непрочитанных
         loadUnreadCount();
 
         // Загрузка списка комнат
         const fetchRooms = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/rooms`);
-                const roomsData = await response.json();
-                const roomsWithCounts = roomsData.map(room => ({
-                    name: room.name,
-                    displayName: room.displayName,
-                    description: room.description,
+                const response = await axios.get(`${API_URL}/api/rooms`);
+                setRooms(response.data.map(room => ({
+                    ...room,
                     userCount: 0,
                     users: []
-                }));
-                setRooms(roomsWithCounts);
+                })));
             } catch (error) {
                 console.error('Ошибка загрузки комнат:', error);
-                setRooms([
-                    { name: 'главная', displayName: 'Главная', userCount: 0, users: [] },
-                    { name: 'знакомства', displayName: 'Знакомства', userCount: 0, users: [] },
-                    { name: 'беспредел', displayName: 'Беспредел', userCount: 0, users: [] }
-                ]);
             }
         };
 
         fetchRooms();
+    }, [handleLogout, loadUnreadCount]);
 
-        // Подключение к Socket.io
-        socketRef.current = io(WS_URL, {
-            transports: ['websocket', 'polling']
+    // Socket.IO подключение
+    useEffect(() => {
+        const token = localStorage.getItem('chatToken');
+        if (!token || !user) return;
+
+        // Предотвращение повторного подключения
+        if (socketRef.current?.connected) return;
+
+        console.log('🔌 Подключение к Socket.IO...');
+        const socket = io(WS_URL, {
+            transports: ['websocket', 'polling'],
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            reconnectionAttempts: 5
         });
 
-        const socket = socketRef.current;
+        socketRef.current = socket;
 
         socket.on('connect', () => {
             console.log('✅ Подключено к серверу');
             setConnected(true);
-            socket.emit('authenticate', { token, room: selectedRoom });
+            socket.emit('authenticate', { token, room: currentRoom });
         });
 
         socket.on('authenticated', (data) => {
@@ -104,55 +114,75 @@ function Chat({ setAuth }) {
         });
 
         socket.on('auth_error', (error) => {
-            console.error('Ошибка авторизации:', error);
+            console.error('❌ Ошибка авторизации:', error);
             handleLogout();
         });
 
         socket.on('message_history', (history) => {
+            console.log('📜 История сообщений:', history.length);
+            messageIdsRef.current.clear(); // Сброс кэша ID
             setMessages(history);
+            history.forEach(msg => {
+                if (msg.id || msg._id) {
+                    messageIdsRef.current.add(msg.id || msg._id);
+                }
+            });
         });
 
         socket.on('new_message', (message) => {
+            const messageId = message.id || message._id;
+
+            // Предотвращение дублирования
+            if (messageId && messageIdsRef.current.has(messageId)) {
+                console.warn('⚠️ Дублирующееся сообщение:', messageId);
+                return;
+            }
+
+            console.log('📨 Новое сообщение:', message);
             setMessages(prev => [...prev, message]);
+
+            if (messageId) {
+                messageIdsRef.current.add(messageId);
+            }
         });
 
         socket.on('user_joined', (data) => {
-            console.log('✅ Пользователь присоединился:', data);
-            setSystemMessages(prev => [...prev, {
+            console.log('👋 Пользователь присоединился:', data.nickname);
+            setSystemMessages(prev => [...prev.slice(-9), {
                 ...data,
                 timestamp: Date.now(),
                 userId: data.userId || null
             }]);
-
-            // Очищаем старые системные сообщения (оставляем последние 10)
-            setTimeout(() => {
-                setSystemMessages(prev => prev.slice(-10));
-            }, 100);
         });
 
         socket.on('user_left', (data) => {
-            console.log('👋 Пользователь вышел:', data);
-            setSystemMessages(prev => [...prev, {
+            console.log('👋 Пользователь вышел:', data.nickname);
+            setSystemMessages(prev => [...prev.slice(-9), {
                 ...data,
                 timestamp: Date.now(),
                 userId: data.userId || null
             }]);
-
-            setTimeout(() => {
-                setSystemMessages(prev => prev.slice(-10));
-            }, 100);
         });
 
         socket.on('room_changed', (data) => {
+            console.log('🚪 Смена комнаты:', data.room);
+            messageIdsRef.current.clear(); // Сброс кэша при смене комнаты
             setCurrentRoom(data.room);
             setMessages(data.messages);
             setSelectedUser(null);
             setSystemMessages([]);
             localStorage.setItem('selectedRoom', data.room);
+
+            // Заполняем кэш ID из истории
+            data.messages.forEach(msg => {
+                if (msg.id || msg._id) {
+                    messageIdsRef.current.add(msg.id || msg._id);
+                }
+            });
         });
 
         socket.on('rooms_update', (roomsData) => {
-            if (roomsData && roomsData.length > 0) {
+            if (roomsData?.length > 0) {
                 setRooms(roomsData);
             }
         });
@@ -160,49 +190,67 @@ function Chat({ setAuth }) {
         socket.on('user_typing', (data) => {
             if (data.room === currentRoom) {
                 setTyping(data.nickname);
+
                 if (typingTimeoutRef.current) {
                     clearTimeout(typingTimeoutRef.current);
                 }
+
                 typingTimeoutRef.current = setTimeout(() => {
                     setTyping(null);
                 }, 3000);
             }
         });
 
-        // Обработка приватных сообщений
-        socket.on('private_message', (message) => {
-            console.log('📩 Chat.jsx получил приватное сообщение:', message);
+        socket.on('private_message', () => {
             loadUnreadCount();
         });
 
         socket.on('unread_count_update', () => {
-            console.log('🔔 Chat.jsx получил обновление счетчика');
             loadUnreadCount();
         });
 
-        socket.on('disconnect', () => {
-            console.log('❌ Отключено от сервера');
+        socket.on('disconnect', (reason) => {
+            console.log('❌ Отключено от сервера:', reason);
             setConnected(false);
         });
 
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('🔄 Переподключение успешно, попытка:', attemptNumber);
+            socket.emit('authenticate', { token, room: currentRoom });
+        });
+
+        // Очистка при размонтировании
         return () => {
-            if (socket) {
-                socket.disconnect();
-            }
+            console.log('🧹 Очистка Socket.IO');
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
+            socket.off('connect');
+            socket.off('authenticated');
+            socket.off('auth_error');
+            socket.off('message_history');
+            socket.off('new_message');
+            socket.off('user_joined');
+            socket.off('user_left');
+            socket.off('room_changed');
+            socket.off('rooms_update');
+            socket.off('user_typing');
+            socket.off('private_message');
+            socket.off('unread_count_update');
+            socket.off('disconnect');
+            socket.off('reconnect');
+            socket.disconnect();
+            socketRef.current = null;
         };
-    }, []);
+    }, [user, currentRoom, handleLogout, loadUnreadCount]);
 
-    const handleSendMessage = (e) => {
+    const handleSendMessage = useCallback((e) => {
         e.preventDefault();
 
-        if (!inputMessage.trim() || !socketRef.current || !connected) {
+        if (!inputMessage.trim() || !socketRef.current?.connected) {
             return;
         }
 
-        // Обычное сообщение в комнату (может быть с упоминанием пользователя)
         const messageData = {
             text: selectedUser
                 ? `@${selectedUser.nickname} ${inputMessage.trim()}`
@@ -212,93 +260,68 @@ function Chat({ setAuth }) {
         socketRef.current.emit('send_message', messageData);
         setInputMessage('');
         setSelectedUser(null);
-    };
+    }, [inputMessage, selectedUser]);
 
-    const handleInputChange = (e) => {
+    const handleInputChange = useCallback((e) => {
         setInputMessage(e.target.value);
 
-        if (socketRef.current && connected && e.target.value.trim()) {
+        if (socketRef.current?.connected && e.target.value.trim()) {
             socketRef.current.emit('typing');
         }
-    };
+    }, []);
 
-    const handleRoomChange = (roomName) => {
-        if (socketRef.current && connected && roomName !== currentRoom) {
+    const handleRoomChange = useCallback((roomName) => {
+        if (socketRef.current?.connected && roomName !== currentRoom) {
             socketRef.current.emit('join_room', roomName);
         }
-    };
+    }, [currentRoom]);
 
-    const handleUserClick = (u) => {
-        if (u.userId === user.id) return;
+    const handleUserClick = useCallback((u) => {
+        if (u.userId === user?.id) return;
         setSelectedUser({
             userId: u.userId,
             nickname: u.nickname
         });
-    };
+    }, [user]);
 
-    const handleOpenPrivateMessage = (targetUser) => {
+    const handleOpenPrivateMessage = useCallback((targetUser) => {
         setPrivateMessageUser(targetUser);
         setShowPrivateMessages(true);
         setSelectedUser(null);
-    };
+    }, []);
 
-    const handleTimeClick = (timestamp) => {
+    const handleTimeClick = useCallback((timestamp) => {
         const date = new Date(timestamp);
         const timeStr = date.toLocaleTimeString('ru-RU', {
             hour: '2-digit',
             minute: '2-digit'
         });
         setInputMessage(prev => prev ? `${prev} ${timeStr}` : timeStr);
-    };
+    }, []);
 
-
-    const handleColorChange = (updatedUser) => {
+    const handleColorChange = useCallback((updatedUser) => {
         setUser(updatedUser);
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-            const token = localStorage.getItem('chatToken');
-            socketRef.current.connect();
-            socketRef.current.emit('authenticate', { token, room: currentRoom });
-        }
-    };
+    }, []);
 
-
-    const handleGenderChange = (updatedUser) => {
+    const handleGenderChange = useCallback((updatedUser) => {
         setUser(updatedUser);
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-            const token = localStorage.getItem('chatToken');
-            socketRef.current.connect();
-            socketRef.current.emit('authenticate', { token, room: currentRoom });
-        }
-    };
+    }, []);
 
-    const handleLogout = () => {
-        if (socketRef.current) {
-            socketRef.current.disconnect();
-        }
-        localStorage.removeItem('chatToken');
-        localStorage.removeItem('chatUser');
-        localStorage.removeItem('selectedRoom');
-        setAuth(false);
-        navigate('/login');
-    };
-
-    const handleOpenPrivateMessages = () => {
+    const handleOpenPrivateMessages = useCallback(() => {
         setPrivateMessageUser(null);
         setShowPrivateMessages(true);
-    };
+    }, []);
 
-    const handleClosePrivateMessages = () => {
+    const handleClosePrivateMessages = useCallback(() => {
         setShowPrivateMessages(false);
         setPrivateMessageUser(null);
         loadUnreadCount();
-    };
+    }, [loadUnreadCount]);
 
-    const getCurrentRoomUsers = () => {
+    const getCurrentRoomUsers = useCallback(() => {
         const room = rooms.find(r => r.name === currentRoom);
-        return room ? room.users : [];
-    };
+        return room?.users || [];
+    }, [rooms, currentRoom]);
 
     if (!user) {
         return (
@@ -328,7 +351,6 @@ function Chat({ setAuth }) {
                         connected={connected}
                         onlineCount={getCurrentRoomUsers().length}
                         user={user}
-                        onLogout={handleLogout}
                     />
 
                     <div className="d-flex flex-grow-1" style={{ overflow: 'hidden' }}>
@@ -365,7 +387,6 @@ function Chat({ setAuth }) {
                 />
             </div>
 
-            {/* Модальное окно приватных сообщений */}
             {showPrivateMessages && (
                 <PrivateMessagesModal
                     show={showPrivateMessages}

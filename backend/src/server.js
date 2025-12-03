@@ -38,9 +38,25 @@ app.use(express.json());
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/chat-app";
 mongoose
-  .connect(MONGODB_URI)
-  .then(() => console.log("✅ MongoDB подключен"))
-  .catch((err) => console.error("❌ Ошибка MongoDB:", err));
+  .connect(MONGODB_URI, {
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  })
+  .then(() => console.log('✅ MongoDB подключен'))
+  .catch((err) => {
+    console.error('❌ Ошибка MongoDB:', err);
+    process.exit(1);
+  });
+
+  // Обработка ошибок подключения
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB disconnected');
+});
 
 // Schemas
 const userSchema = new mongoose.Schema({
@@ -102,6 +118,12 @@ const User = mongoose.model("User", userSchema);
 const Message = mongoose.model("Message", messageSchema);
 const Room = mongoose.model("Room", roomSchema);
 const PrivateMessage = mongoose.model("PrivateMessage", privateMessageSchema);
+
+userSchema.index({ nickname: 1 });
+userSchema.index({ email: 1 });
+messageSchema.index({ room: 1, timestamp: -1 });
+privateMessageSchema.index({ toUserId: 1, fromUserId: 1, timestamp: -1 });
+privateMessageSchema.index({ toUserId: 1, read: 1 });
 
 // JWT Secret
 const JWT_SECRET =

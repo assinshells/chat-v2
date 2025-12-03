@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { getColorHex } from '../utils/colors';
 
-function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
+const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
         return date.toLocaleTimeString('ru-RU', {
@@ -83,6 +84,12 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
             </li>
         </ul>
     );
-}
+}, (prevProps, nextProps) => {
+    // Сравнение пропсов для оптимизации
+    return (
+        prevProps.message.id === nextProps.message.id &&
+        prevProps.isOwnMessage === nextProps.isOwnMessage
+    );
+});
 
 export default MessageItem;
