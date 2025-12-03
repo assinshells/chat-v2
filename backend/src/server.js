@@ -47,6 +47,11 @@ const userSchema = new mongoose.Schema({
   nickname: { type: String, required: true, unique: true, trim: true },
   email: { type: String, sparse: true, trim: true, lowercase: true },
   password: { type: String, required: true },
+  messageColor: {
+    type: String,
+    default: "black",
+    enum: ["black", "blue", "green", "purple", "orange"],
+  },
   createdAt: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
 });
@@ -54,10 +59,11 @@ const userSchema = new mongoose.Schema({
 const messageSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   nickname: { type: String, required: true },
+  messageColor: { type: String, default: "black" },
   text: { type: String, required: true },
   room: { type: String, required: true, default: "главная" },
-  toUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Адресат
-  toNickname: { type: String }, // Никнейм адресата
+  toUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  toNickname: { type: String },
   timestamp: { type: Date, default: Date.now },
 });
 
@@ -75,6 +81,7 @@ const privateMessageSchema = new mongoose.Schema({
     required: true,
   },
   fromNickname: { type: String, required: true },
+  fromMessageColor: { type: String, default: "black" },
   toUserId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -100,6 +107,9 @@ const registerSchema = Joi.object({
   nickname: Joi.string().min(3).max(30).required(),
   email: Joi.string().email().allow("", null),
   password: Joi.string().min(6).required(),
+  messageColor: Joi.string()
+    .valid("black", "blue", "green", "purple", "orange")
+    .default("black"),
 });
 
 const loginSchema = Joi.object({
@@ -173,7 +183,7 @@ app.post("/api/register", async (req, res) => {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    const { nickname, email, password } = value;
+    const { nickname, email, password, messageColor } = value;
 
     const existingUser = await User.findOne({
       $or: [{ nickname }, ...(email ? [{ email }] : [])],
@@ -189,6 +199,7 @@ app.post("/api/register", async (req, res) => {
       nickname,
       email: email || null,
       password: hashedPassword,
+      messageColor: messageColor || "black",
     });
 
     await user.save();
@@ -205,6 +216,7 @@ app.post("/api/register", async (req, res) => {
         id: user._id,
         nickname: user.nickname,
         email: user.email,
+        messageColor: user.messageColor,
       },
     });
   } catch (error) {
@@ -251,6 +263,7 @@ app.post("/api/login", async (req, res) => {
         id: user._id,
         nickname: user.nickname,
         email: user.email,
+        messageColor: user.messageColor,
       },
     });
   } catch (error) {
@@ -335,7 +348,7 @@ app.post("/api/reset-password", async (req, res) => {
   }
 });
 
-// Получение списка комнат (доступно без авторизации)
+// Получение списка комнат
 app.get("/api/rooms", async (req, res) => {
   try {
     const rooms = await Room.find().sort({ name: 1 }).lean();
@@ -376,9 +389,39 @@ app.get("/api/user", authenticateToken, async (req, res) => {
       id: user._id,
       nickname: user.nickname,
       email: user.email,
+      messageColor: user.messageColor,
     });
   } catch (error) {
     console.error("Ошибка получения пользователя:", error);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// Обновление цвета сообщений
+app.patch("/api/user/message-color", authenticateToken, async (req, res) => {
+  try {
+    const { messageColor } = req.body;
+
+    if (
+      !["black", "blue", "green", "purple", "orange"].includes(messageColor)
+    ) {
+      return res.status(400).json({ error: "Недопустимый цвет" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { messageColor },
+      { new: true }
+    ).select("-password");
+
+    res.json({
+      id: user._id,
+      nickname: user.nickname,
+      email: user.email,
+      messageColor: user.messageColor,
+    });
+  } catch (error) {
+    console.error("Ошибка обновления цвета:", error);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
@@ -388,12 +431,10 @@ app.get("/api/conversations", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Получаем все приватные сообщения пользователя
     const messages = await PrivateMessage.find({
       $or: [{ fromUserId: userId }, { toUserId: userId }],
     }).sort({ timestamp: -1 });
 
-    // Группируем по собеседникам
     const conversationsMap = new Map();
 
     for (const msg of messages) {
@@ -404,7 +445,6 @@ app.get("/api/conversations", authenticateToken, async (req, res) => {
       const partnerNickname = isFromMe ? msg.toNickname : msg.fromNickname;
 
       if (!conversationsMap.has(partnerId)) {
-        // Подсчитываем непрочитанные сообщения
         const unreadCount = await PrivateMessage.countDocuments({
           toUserId: userId,
           fromUserId: partnerId,
@@ -441,7 +481,7 @@ app.get(
     try {
       const currentUserId = req.user.id;
       const partnerId = req.params.userId;
-      const limit = parseInt(req.query.limit) || 50;
+      const limit = parseInt(req.query.limit) || 100;
 
       const messages = await PrivateMessage.find({
         $or: [
@@ -453,7 +493,6 @@ app.get(
         .limit(limit)
         .lean();
 
-      // Отмечаем полученные сообщения как прочитанные
       await PrivateMessage.updateMany(
         {
           fromUserId: partnerId,
@@ -489,10 +528,6 @@ app.post(
         { read: true }
       );
 
-      console.log(
-        `✅ Отмечено как прочитано: ${result.modifiedCount} сообщений`
-      );
-
       res.json({ success: true, modifiedCount: result.modifiedCount });
     } catch (error) {
       console.error("Ошибка отметки сообщений:", error);
@@ -523,12 +558,9 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ===== Socket.io для комнат =====
+// ===== Socket.io =====
 
-// Структура: roomName -> Set of { socketId, userId, nickname }
 const roomUsers = new Map();
-
-// socketId -> { userId, nickname, currentRoom }
 const connectedUsers = new Map();
 
 const getRoomUsers = (roomName) => {
@@ -538,10 +570,8 @@ const getRoomUsers = (roomName) => {
 
 const getRoomsInfo = async () => {
   try {
-    // Получаем все комнаты из БД
     const allRooms = await Room.find().lean();
 
-    // Добавляем информацию о пользователях
     const roomsWithUsers = allRooms.map((room) => {
       const users = roomUsers.get(room.name) || new Set();
       return {
@@ -563,7 +593,6 @@ const getRoomsInfo = async () => {
 io.on("connection", (socket) => {
   console.log("🔌 Новое подключение:", socket.id);
 
-  // Аутентификация
   socket.on("authenticate", async ({ token, room }) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
@@ -576,21 +605,21 @@ io.on("connection", (socket) => {
 
       socket.userId = user._id.toString();
       socket.nickname = user.nickname;
-      socket.currentRoom = room || "главная"; // Используем выбранную комнату
+      socket.messageColor = user.messageColor;
+      socket.currentRoom = room || "главная";
 
       connectedUsers.set(socket.id, {
         userId: socket.userId,
         nickname: socket.nickname,
+        messageColor: socket.messageColor,
         currentRoom: socket.currentRoom,
       });
 
       user.lastSeen = new Date();
       await user.save();
 
-      // Присоединение к выбранной комнате
       socket.join(socket.currentRoom);
 
-      // Добавление в список пользователей комнаты
       if (!roomUsers.has(socket.currentRoom)) {
         roomUsers.set(socket.currentRoom, new Set());
       }
@@ -598,9 +627,9 @@ io.on("connection", (socket) => {
         socketId: socket.id,
         userId: socket.userId,
         nickname: socket.nickname,
+        messageColor: socket.messageColor,
       });
 
-      // Отправка истории сообщений выбранной комнаты
       const messages = await Message.find({ room: socket.currentRoom })
         .sort({ timestamp: -1 })
         .limit(50)
@@ -612,22 +641,15 @@ io.on("connection", (socket) => {
         room: socket.currentRoom,
       });
 
-      // Отправка информации о комнатах всем
       const roomsInfo = await getRoomsInfo();
       io.emit("rooms_update", roomsInfo);
 
-      // Уведомление в комнату о новом пользователе
       io.to(socket.currentRoom).emit("user_joined", {
         nickname: user.nickname,
         room: socket.currentRoom,
       });
 
-      console.log(
-        "✅ Пользователь авторизован:",
-        user.nickname,
-        "в комнате:",
-        socket.currentRoom
-      );
+      console.log("✅ Пользователь авторизован:", user.nickname);
     } catch (error) {
       console.error("Ошибка аутентификации:", error);
       socket.emit("auth_error", "Недействительный токен");
@@ -635,7 +657,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Смена комнаты
   socket.on("join_room", async (roomName) => {
     if (!socket.userId) {
       return socket.emit("error", "Не авторизован");
@@ -644,12 +665,10 @@ io.on("connection", (socket) => {
     try {
       const oldRoom = socket.currentRoom;
 
-      // Покинуть старую комнату
       if (oldRoom) {
         socket.leave(oldRoom);
         const oldRoomUsers = roomUsers.get(oldRoom);
         if (oldRoomUsers) {
-          // Удаление пользователя из старой комнаты
           oldRoomUsers.forEach((u) => {
             if (u.socketId === socket.id) {
               oldRoomUsers.delete(u);
@@ -663,7 +682,6 @@ io.on("connection", (socket) => {
         });
       }
 
-      // Присоединиться к новой комнате
       socket.join(roomName);
       socket.currentRoom = roomName;
 
@@ -672,7 +690,6 @@ io.on("connection", (socket) => {
         userInfo.currentRoom = roomName;
       }
 
-      // Добавление в список пользователей новой комнаты
       if (!roomUsers.has(roomName)) {
         roomUsers.set(roomName, new Set());
       }
@@ -680,9 +697,9 @@ io.on("connection", (socket) => {
         socketId: socket.id,
         userId: socket.userId,
         nickname: socket.nickname,
+        messageColor: socket.messageColor,
       });
 
-      // Отправка истории новой комнаты
       const messages = await Message.find({ room: roomName })
         .sort({ timestamp: -1 })
         .limit(50)
@@ -693,11 +710,9 @@ io.on("connection", (socket) => {
         messages: messages.reverse(),
       });
 
-      // Обновление информации о комнатах
       const roomsInfo = await getRoomsInfo();
       io.emit("rooms_update", roomsInfo);
 
-      // Уведомление в новую комнату
       io.to(roomName).emit("user_joined", {
         nickname: socket.nickname,
         room: roomName,
@@ -710,24 +725,17 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Отправка сообщения
   socket.on("send_message", async (messageData) => {
     if (!socket.userId) {
       return socket.emit("error", "Не авторизован");
     }
 
     try {
-      // Если это приватное сообщение
       if (messageData.toUserId && messageData.toNickname) {
-        console.log("📧 Отправка приватного сообщения:", {
-          from: socket.nickname,
-          to: messageData.toNickname,
-          text: messageData.text,
-        });
-
         const privateMsg = new PrivateMessage({
           fromUserId: socket.userId,
           fromNickname: socket.nickname,
+          fromMessageColor: socket.messageColor,
           toUserId: messageData.toUserId,
           toNickname: messageData.toNickname,
           text: messageData.text,
@@ -739,6 +747,7 @@ io.on("connection", (socket) => {
           id: privateMsg._id.toString(),
           fromUserId: privateMsg.fromUserId.toString(),
           fromNickname: privateMsg.fromNickname,
+          fromMessageColor: privateMsg.fromMessageColor,
           toUserId: privateMsg.toUserId.toString(),
           toNickname: privateMsg.toNickname,
           text: privateMsg.text,
@@ -746,11 +755,8 @@ io.on("connection", (socket) => {
           timestamp: privateMsg.timestamp,
         };
 
-        // Отправляем отправителю
         socket.emit("private_message", messagePayload);
-        console.log("✅ Отправлено отправителю:", socket.nickname);
 
-        // Находим всех получателей (могут быть несколько сокетов одного пользователя)
         const recipientSockets = [];
         for (const [socketId, userData] of connectedUsers.entries()) {
           if (userData.userId === messageData.toUserId) {
@@ -758,27 +764,15 @@ io.on("connection", (socket) => {
           }
         }
 
-        console.log(
-          `📤 Найдено сокетов получателя (${messageData.toNickname}):`,
-          recipientSockets.length
-        );
-
-        // Отправляем всем сокетам получателя
         recipientSockets.forEach((recipientSocketId) => {
           io.to(recipientSocketId).emit("private_message", messagePayload);
           io.to(recipientSocketId).emit("unread_count_update");
-          console.log("✅ Отправлено получателю:", recipientSocketId);
         });
-
-        // Если получатель не онлайн, все равно сохраняем сообщение
-        if (recipientSockets.length === 0) {
-          console.log("⚠️ Получатель оффлайн, сообщение сохранено в БД");
-        }
       } else {
-        // Обычное сообщение в комнату
         const message = new Message({
           userId: socket.userId,
           nickname: socket.nickname,
+          messageColor: socket.messageColor,
           text: messageData.text,
           room: socket.currentRoom,
         });
@@ -789,6 +783,7 @@ io.on("connection", (socket) => {
           id: message._id,
           userId: message.userId,
           nickname: message.nickname,
+          messageColor: message.messageColor,
           text: message.text,
           room: message.room,
           timestamp: message.timestamp,
@@ -800,7 +795,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Уведомление о печати
   socket.on("typing", () => {
     if (socket.userId && socket.currentRoom) {
       socket.to(socket.currentRoom).emit("user_typing", {
@@ -810,10 +804,8 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Отключение
   socket.on("disconnect", async () => {
     if (socket.userId && socket.currentRoom) {
-      // Удаление из комнаты
       const roomUsersSet = roomUsers.get(socket.currentRoom);
       if (roomUsersSet) {
         roomUsersSet.forEach((u) => {
@@ -830,7 +822,6 @@ io.on("connection", (socket) => {
 
       connectedUsers.delete(socket.id);
 
-      // Обновление информации о комнатах
       const roomsInfo = await getRoomsInfo();
       io.emit("rooms_update", roomsInfo);
 

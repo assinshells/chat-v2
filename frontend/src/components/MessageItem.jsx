@@ -1,3 +1,5 @@
+import { getColorHex } from '../utils/colors';
+
 function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
@@ -6,6 +8,12 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
             minute: '2-digit'
         });
     };
+
+    // Цвет никнейма: мой - красный, остальные - чёрный
+    const nicknameColor = isOwnMessage ? '#dc3545' : '#000000';
+
+    // Цвет текста сообщения: выбранный цвет пользователя
+    const messageTextColor = getColorHex(message.messageColor || 'black');
 
     return (
         <ul className="list-unstyled mb-0">
@@ -37,7 +45,7 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                             title={!isOwnMessage ? 'Кликните, чтобы ответить' : 'Вы'}
                             style={{
                                 cursor: !isOwnMessage ? 'pointer' : 'default',
-                                color: isOwnMessage ? '#0d6efd' : '#6c757d',
+                                color: nicknameColor,
                                 fontSize: '0.95rem'
                             }}
                         >
@@ -48,8 +56,11 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                         {/* Адресат (если есть) */}
                         {message.toNickname && (
                             <span
-                                className="text-primary me-2"
-                                style={{ fontSize: '0.9rem' }}
+                                className="me-2"
+                                style={{
+                                    fontSize: '0.9rem',
+                                    color: '#000000' // Адресат всегда чёрным
+                                }}
                                 title={`Ответ для ${message.toNickname}`}
                             >
                                 <i className="bi bi-arrow-right-short"></i>
@@ -58,7 +69,13 @@ function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
                         )}
 
                         {/* Текст сообщения */}
-                        <span className="message-text" style={{ fontSize: '0.95rem' }}>
+                        <span
+                            className="message-text"
+                            style={{
+                                fontSize: '0.95rem',
+                                color: messageTextColor
+                            }}
+                        >
                             {message.text}
                         </span>
                     </div>

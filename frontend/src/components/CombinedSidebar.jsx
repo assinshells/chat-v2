@@ -1,9 +1,10 @@
+import { getColorHex } from '../utils/colors';
+
 function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser, onUserClick, connected }) {
     return (
         <div className="combined-sidebar border-start d-none d-lg-flex flex-column" style={{ width: '280px', height: '100vh' }}>
             {/* Секция комнат - 30% */}
             <div className="rooms-section border-bottom" style={{ height: '30%', overflow: 'auto' }}>
-
                 <div className="rooms-list">
                     {rooms.length > 0 ? (
                         rooms.map((room) => {
@@ -21,7 +22,6 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                     }}
                                 >
                                     <div className="d-flex justify-content-between align-items-center">
-                                        {/* Левая часть: название комнаты */}
                                         <div className="flex-grow-1">
                                             <div className={`fw-bold ${isActive ? "text-muted" : ""}`}>
                                                 <i className="bi bi-hash me-1"></i>
@@ -29,7 +29,6 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                             </div>
                                         </div>
 
-                                        {/* Правая часть: количество пользователей */}
                                         <div className="d-flex align-items-center">
                                             <small
                                                 className={isActive ? "text-white-50 me-2" : "text-muted me-2"}
@@ -65,6 +64,7 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                     {users.length > 0 ? (
                         users.map((u) => {
                             const isCurrentUser = u.userId === currentUser.id;
+                            const userColor = getColorHex(u.messageColor || 'black');
 
                             return (
                                 <div
@@ -82,13 +82,18 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                         style={{
                                             width: '10px',
                                             height: '10px',
-                                            backgroundColor: isCurrentUser ? '#0d6efd' : '#198754',
+                                            backgroundColor: isCurrentUser ? '#dc3545' : '#198754',
                                             boxShadow: '0 0 4px rgba(25, 135, 84, 0.5)'
                                         }}
                                     ></div>
-                                    <span className={isCurrentUser ? 'fw-bold text-primary' : ''}>
+                                    <span
+                                        className={isCurrentUser ? 'fw-bold' : ''}
+                                        style={{
+                                            color: userColor
+                                        }}
+                                    >
                                         {u.nickname}
-
+                                        {isCurrentUser && ' (я)'}
                                     </span>
                                 </div>
                             );

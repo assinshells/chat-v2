@@ -5,13 +5,22 @@ import '../assets/css/auth.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+const COLOR_OPTIONS = [
+    { value: 'black', label: 'Чёрный', hex: '#000000' },
+    { value: 'blue', label: 'Синий', hex: '#0d6efd' },
+    { value: 'green', label: 'Зелёный', hex: '#198754' },
+    { value: 'purple', label: 'Фиолетовый', hex: '#6f42c1' },
+    { value: 'orange', label: 'Оранжевый', hex: '#fd7e14' }
+];
+
 function Register({ setAuth }) {
     const [formData, setFormData] = useState({
         nickname: '',
         email: '',
         password: '',
         confirmPassword: '',
-        room: 'главная'
+        room: 'главная',
+        messageColor: 'black'
     });
     const [rooms, setRooms] = useState([]);
     const [error, setError] = useState('');
@@ -19,7 +28,6 @@ function Register({ setAuth }) {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Загрузка списка комнат
         const fetchRooms = async () => {
             try {
                 const response = await axios.get(`${API_URL}/api/rooms`);
@@ -50,7 +58,8 @@ function Register({ setAuth }) {
             const response = await axios.post(`${API_URL}/api/register`, {
                 nickname: formData.nickname,
                 email: formData.email,
-                password: formData.password
+                password: formData.password,
+                messageColor: formData.messageColor
             });
 
             localStorage.setItem('chatToken', response.data.token);
@@ -136,6 +145,54 @@ function Register({ setAuth }) {
                                             required
                                             placeholder="Повторите пароль"
                                         />
+                                    </div>
+
+                                    {/* Выбор цвета сообщений */}
+                                    <div className="mb-4">
+                                        <label className="form-label d-block mb-3">
+                                            <i className="bi bi-palette me-2"></i>
+                                            Цвет ваших сообщений *
+                                        </label>
+                                        <div className="d-flex flex-wrap gap-3">
+                                            {COLOR_OPTIONS.map(color => (
+                                                <div
+                                                    key={color.value}
+                                                    className="form-check"
+                                                >
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="radio"
+                                                        name="messageColor"
+                                                        id={`color-${color.value}`}
+                                                        value={color.value}
+                                                        checked={formData.messageColor === color.value}
+                                                        onChange={handleChange}
+                                                        style={{ cursor: 'pointer' }}
+                                                    />
+                                                    <label
+                                                        className="form-check-label d-flex align-items-center"
+                                                        htmlFor={`color-${color.value}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        <span
+                                                            className="d-inline-block me-2 rounded"
+                                                            style={{
+                                                                width: '20px',
+                                                                height: '20px',
+                                                                backgroundColor: color.hex,
+                                                                border: '1px solid #dee2e6'
+                                                            }}
+                                                        ></span>
+                                                        <span style={{ color: color.hex, fontWeight: '500' }}>
+                                                            {color.label}
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <small className="text-muted d-block mt-2">
+                                            Выберите цвет, которым будут отображаться ваши сообщения
+                                        </small>
                                     </div>
 
                                     <div className="mb-3">
