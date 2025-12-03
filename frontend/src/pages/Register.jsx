@@ -13,6 +13,12 @@ const COLOR_OPTIONS = [
     { value: 'orange', label: 'Оранжевый', hex: '#fd7e14' }
 ];
 
+const GENDER_OPTIONS = [
+    { value: 'male', label: 'Мужской', icon: 'bi-gender-male' },
+    { value: 'female', label: 'Женский', icon: 'bi-gender-female' },
+    { value: 'unknown', label: 'Неизвестно', icon: 'bi-gender-ambiguous' }
+];
+
 function Register({ setAuth }) {
     const [formData, setFormData] = useState({
         nickname: '',
@@ -20,7 +26,8 @@ function Register({ setAuth }) {
         password: '',
         confirmPassword: '',
         room: 'главная',
-        messageColor: 'black'
+        messageColor: 'black',
+        gender: 'male'
     });
     const [rooms, setRooms] = useState([]);
     const [error, setError] = useState('');
@@ -59,7 +66,8 @@ function Register({ setAuth }) {
                 nickname: formData.nickname,
                 email: formData.email,
                 password: formData.password,
-                messageColor: formData.messageColor
+                messageColor: formData.messageColor,
+                gender: formData.gender
             });
 
             localStorage.setItem('chatToken', response.data.token);
@@ -192,6 +200,46 @@ function Register({ setAuth }) {
                                         </div>
                                         <small className="text-muted d-block mt-2">
                                             Выберите цвет, которым будут отображаться ваши сообщения
+                                        </small>
+                                    </div>
+
+                                    {/* Выбор пола */}
+                                    <div className="mb-4">
+                                        <label className="form-label d-block mb-3">
+                                            <i className="bi bi-person-badge me-2"></i>
+                                            Пол *
+                                        </label>
+                                        <div className="d-flex flex-wrap gap-3">
+                                            {GENDER_OPTIONS.map(gender => (
+                                                <div
+                                                    key={gender.value}
+                                                    className="form-check"
+                                                >
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="radio"
+                                                        name="gender"
+                                                        id={`gender-${gender.value}`}
+                                                        value={gender.value}
+                                                        checked={formData.gender === gender.value}
+                                                        onChange={handleChange}
+                                                        style={{ cursor: 'pointer' }}
+                                                    />
+                                                    <label
+                                                        className="form-check-label d-flex align-items-center"
+                                                        htmlFor={`gender-${gender.value}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        <i className={`bi ${gender.icon} me-2`} style={{ fontSize: '1.2rem' }}></i>
+                                                        <span style={{ fontWeight: '500' }}>
+                                                            {gender.label}
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <small className="text-muted d-block mt-2">
+                                            Влияет на текст уведомлений о входе/выходе
                                         </small>
                                     </div>
 

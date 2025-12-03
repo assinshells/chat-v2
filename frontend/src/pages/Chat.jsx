@@ -25,6 +25,7 @@ function Chat({ setAuth }) {
     const [showPrivateMessages, setShowPrivateMessages] = useState(false);
     const [privateMessageUser, setPrivateMessageUser] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [systemMessages, setSystemMessages] = useState([]);
 
     const socketRef = useRef(null);
     const typingTimeoutRef = useRef(null);
@@ -115,10 +116,38 @@ function Chat({ setAuth }) {
             setMessages(prev => [...prev, message]);
         });
 
+        socket.on('user_joined', (data) => {
+            console.log('✅ Пользователь присоединился:', data);
+            setSystemMessages(prev => [...prev, {
+                ...data,
+                timestamp: Date.now(),
+                userId: data.userId || null
+            }]);
+
+            // Очищаем старые системные сообщения (оставляем последние 10)
+            setTimeout(() => {
+                setSystemMessages(prev => prev.slice(-10));
+            }, 100);
+        });
+
+        socket.on('user_left', (data) => {
+            console.log('👋 Пользователь вышел:', data);
+            setSystemMessages(prev => [...prev, {
+                ...data,
+                timestamp: Date.now(),
+                userId: data.userId || null
+            }]);
+
+            setTimeout(() => {
+                setSystemMessages(prev => prev.slice(-10));
+            }, 100);
+        });
+
         socket.on('room_changed', (data) => {
             setCurrentRoom(data.room);
             setMessages(data.messages);
             setSelectedUser(null);
+            setSystemMessages([]);
             localStorage.setItem('selectedRoom', data.room);
         });
 
@@ -222,6 +251,28 @@ function Chat({ setAuth }) {
         setInputMessage(prev => prev ? `${prev} ${timeStr}` : timeStr);
     };
 
+
+    const handleColorChange = (updatedUser) => {
+        setUser(updatedUser);
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+            const token = localStorage.getItem('chatToken');
+            socketRef.current.connect();
+            socketRef.current.emit('authenticate', { token, room: currentRoom });
+        }
+    };
+
+
+    const handleGenderChange = (updatedUser) => {
+        setUser(updatedUser);
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+            const token = localStorage.getItem('chatToken');
+            socketRef.current.connect();
+            socketRef.current.emit('authenticate', { token, room: currentRoom });
+        }
+    };
+
     const handleLogout = () => {
         if (socketRef.current) {
             socketRef.current.disconnect();
@@ -267,6 +318,8 @@ function Chat({ setAuth }) {
                     onLogout={handleLogout}
                     unreadCount={unreadCount}
                     onOpenPrivateMessages={handleOpenPrivateMessages}
+                    onColorChange={handleColorChange}
+                    onGenderChange={handleGenderChange}
                 />
 
                 <div className="user-chat w-100 overflow-hidden">
@@ -285,6 +338,7 @@ function Chat({ setAuth }) {
                             user={user}
                             onUserClick={handleUserClick}
                             onTimeClick={handleTimeClick}
+                            systemMessages={systemMessages}
                         />
                     </div>
 

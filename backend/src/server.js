@@ -52,6 +52,11 @@ const userSchema = new mongoose.Schema({
     default: "black",
     enum: ["black", "blue", "green", "purple", "orange"],
   },
+  gender: {
+    type: String,
+    default: "male",
+    enum: ["male", "female", "unknown"],
+  },
   createdAt: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now },
 });
@@ -110,6 +115,7 @@ const registerSchema = Joi.object({
   messageColor: Joi.string()
     .valid("black", "blue", "green", "purple", "orange")
     .default("black"),
+  gender: Joi.string().valid("male", "female", "unknown").default("male"),
 });
 
 const loginSchema = Joi.object({
@@ -183,7 +189,7 @@ app.post("/api/register", async (req, res) => {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    const { nickname, email, password, messageColor } = value;
+    const { nickname, email, password, messageColor, gender } = value;
 
     const existingUser = await User.findOne({
       $or: [{ nickname }, ...(email ? [{ email }] : [])],
@@ -200,6 +206,7 @@ app.post("/api/register", async (req, res) => {
       email: email || null,
       password: hashedPassword,
       messageColor: messageColor || "black",
+      gender: gender || "male",
     });
 
     await user.save();
@@ -217,6 +224,7 @@ app.post("/api/register", async (req, res) => {
         nickname: user.nickname,
         email: user.email,
         messageColor: user.messageColor,
+        gender: user.gender,
       },
     });
   } catch (error) {
@@ -264,6 +272,7 @@ app.post("/api/login", async (req, res) => {
         nickname: user.nickname,
         email: user.email,
         messageColor: user.messageColor,
+        gender: user.gender,
       },
     });
   } catch (error) {
@@ -390,6 +399,7 @@ app.get("/api/user", authenticateToken, async (req, res) => {
       nickname: user.nickname,
       email: user.email,
       messageColor: user.messageColor,
+      gender: user.gender,
     });
   } catch (error) {
     console.error("Ошибка получения пользователя:", error);
@@ -419,9 +429,38 @@ app.patch("/api/user/message-color", authenticateToken, async (req, res) => {
       nickname: user.nickname,
       email: user.email,
       messageColor: user.messageColor,
+      gender: user.gender,
     });
   } catch (error) {
     console.error("Ошибка обновления цвета:", error);
+    res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+// Обновление пола
+app.patch("/api/user/gender", authenticateToken, async (req, res) => {
+  try {
+    const { gender } = req.body;
+
+    if (!["male", "female", "unknown"].includes(gender)) {
+      return res.status(400).json({ error: "Недопустимый пол" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { gender },
+      { new: true }
+    ).select("-password");
+
+    res.json({
+      id: user._id,
+      nickname: user.nickname,
+      email: user.email,
+      messageColor: user.messageColor,
+      gender: user.gender,
+    });
+  } catch (error) {
+    console.error("Ошибка обновления пола:", error);
     res.status(500).json({ error: "Ошибка сервера" });
   }
 });
@@ -563,6 +602,29 @@ app.get("/health", (req, res) => {
 const roomUsers = new Map();
 const connectedUsers = new Map();
 
+// Функция для склонения глаголов по полу
+const getGenderVerb = (gender, action) => {
+  const verbs = {
+    join: {
+      male: "вошёл",
+      female: "вошла",
+      unknown: "влезло",
+    },
+    switch: {
+      male: "перешёл",
+      female: "перешла",
+      unknown: "переполз",
+    },
+    leave: {
+      male: "покинул",
+      female: "покинула",
+      unknown: "уполз из",
+    },
+  };
+
+  return verbs[action]?.[gender] || verbs[action]?.male || "выполнил действие";
+};
+
 const getRoomUsers = (roomName) => {
   const users = roomUsers.get(roomName) || new Set();
   return Array.from(users);
@@ -606,12 +668,14 @@ io.on("connection", (socket) => {
       socket.userId = user._id.toString();
       socket.nickname = user.nickname;
       socket.messageColor = user.messageColor;
+      socket.gender = user.gender;
       socket.currentRoom = room || "главная";
 
       connectedUsers.set(socket.id, {
         userId: socket.userId,
         nickname: socket.nickname,
         messageColor: socket.messageColor,
+        gender: socket.gender,
         currentRoom: socket.currentRoom,
       });
 
@@ -628,6 +692,7 @@ io.on("connection", (socket) => {
         userId: socket.userId,
         nickname: socket.nickname,
         messageColor: socket.messageColor,
+        gender: socket.gender,
       });
 
       const messages = await Message.find({ room: socket.currentRoom })
@@ -644,9 +709,14 @@ io.on("connection", (socket) => {
       const roomsInfo = await getRoomsInfo();
       io.emit("rooms_update", roomsInfo);
 
+      // Уведомление в комнату о новом пользователе с учетом пола
+      const joinVerb = getGenderVerb(user.gender, "join");
       io.to(socket.currentRoom).emit("user_joined", {
         nickname: user.nickname,
+        messageColor: user.messageColor,
+        gender: user.gender,
         room: socket.currentRoom,
+        message: `${joinVerb} в комнату`,
       });
 
       console.log("✅ Пользователь авторизован:", user.nickname);
@@ -676,9 +746,14 @@ io.on("connection", (socket) => {
           });
         }
 
+        // Уведомление о переходе из старой комнаты
+        const switchVerb = getGenderVerb(socket.gender, "switch");
         io.to(oldRoom).emit("user_left", {
           nickname: socket.nickname,
+          messageColor: socket.messageColor,
+          gender: socket.gender,
           room: oldRoom,
+          message: `${switchVerb} в комнату ${roomName}`,
         });
       }
 
@@ -698,6 +773,7 @@ io.on("connection", (socket) => {
         userId: socket.userId,
         nickname: socket.nickname,
         messageColor: socket.messageColor,
+        gender: socket.gender,
       });
 
       const messages = await Message.find({ room: roomName })
@@ -713,9 +789,14 @@ io.on("connection", (socket) => {
       const roomsInfo = await getRoomsInfo();
       io.emit("rooms_update", roomsInfo);
 
+      // Уведомление в новую комнату о входе
+      const joinVerb = getGenderVerb(socket.gender, "join");
       io.to(roomName).emit("user_joined", {
         nickname: socket.nickname,
+        messageColor: socket.messageColor,
+        gender: socket.gender,
         room: roomName,
+        message: `${joinVerb} в комнату`,
       });
 
       console.log(`👤 ${socket.nickname} переключился в комнату: ${roomName}`);
@@ -815,9 +896,14 @@ io.on("connection", (socket) => {
         });
       }
 
+      // Уведомление о выходе из чата
+      const leaveVerb = getGenderVerb(socket.gender, "leave");
       io.to(socket.currentRoom).emit("user_left", {
         nickname: socket.nickname,
+        messageColor: socket.messageColor,
+        gender: socket.gender,
         room: socket.currentRoom,
+        message: `${leaveVerb} чат`,
       });
 
       connectedUsers.delete(socket.id);

@@ -5,20 +5,21 @@ import reactLogo from '../assets/react.svg';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-const COLOR_OPTIONS = [
-    { value: 'black', label: 'Чёрный', hex: '#000000' },
-    { value: 'blue', label: 'Синий', hex: '#0d6efd' },
-    { value: 'green', label: 'Зелёный', hex: '#198754' },
-    { value: 'purple', label: 'Фиолетовый', hex: '#6f42c1' },
-    { value: 'orange', label: 'Оранжевый', hex: '#fd7e14' }
+const GENDER_OPTIONS = [
+    { value: 'male', label: 'Мужской', icon: 'bi-gender-male' },
+    { value: 'female', label: 'Женский', icon: 'bi-gender-female' },
+    { value: 'unknown', label: 'Неизвестно', icon: 'bi-gender-ambiguous' }
 ];
 
-function Sidebar({ user, onLogout, unreadCount, onOpenPrivateMessages, onColorChange }) {
+function Sidebar({ user, onLogout, unreadCount, onOpenPrivateMessages, onColorChange, onGenderChange }) {
     const { theme, toggleTheme } = useTheme();
     const [selectedColor, setSelectedColor] = useState(user.messageColor || 'black');
+    const [selectedGender, setSelectedGender] = useState(user.gender || 'male');
     const [saving, setSaving] = useState(false);
     const [colorError, setColorError] = useState('');
     const [colorSuccess, setColorSuccess] = useState('');
+    const [genderError, setGenderError] = useState('');
+    const [genderSuccess, setGenderSuccess] = useState('');
 
     const handleColorChange = async (color) => {
         setSelectedColor(color);
@@ -48,6 +49,37 @@ function Sidebar({ user, onLogout, unreadCount, onOpenPrivateMessages, onColorCh
         } catch (error) {
             console.error('Ошибка изменения цвета:', error);
             setColorError('Не удалось изменить цвет');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleGenderChange = async (gender) => {
+        setSelectedGender(gender);
+        setGenderError('');
+        setGenderSuccess('');
+        setSaving(true);
+
+        try {
+            const token = localStorage.getItem('chatToken');
+            const response = await axios.patch(
+                `${API_URL}/api/user/gender`,
+                { gender },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const updatedUser = response.data;
+            localStorage.setItem('chatUser', JSON.stringify(updatedUser));
+
+            if (onGenderChange) {
+                onGenderChange(updatedUser);
+            }
+
+            setGenderSuccess('Пол успешно изменён!');
+            setTimeout(() => setGenderSuccess(''), 3000);
+        } catch (error) {
+            console.error('Ошибка изменения пола:', error);
+            setGenderError('Не удалось изменить пол');
         } finally {
             setSaving(false);
         }
@@ -152,6 +184,63 @@ function Sidebar({ user, onLogout, unreadCount, onOpenPrivateMessages, onColorCh
                                         <strong>Email:</strong> {user.email}
                                     </p>
                                 )}
+                            </div>
+
+                            <hr />
+
+                            {/* Выбор пола */}
+                            <div className="mb-4">
+                                <h6 className="mb-3">
+                                    <i className="bi bi-person-badge me-2"></i>
+                                    Пол
+                                </h6>
+
+                                {genderError && (
+                                    <div className="alert alert-danger py-2">{genderError}</div>
+                                )}
+                                {genderSuccess && (
+                                    <div className="alert alert-success py-2">{genderSuccess}</div>
+                                )}
+
+                                <div className="d-flex flex-column gap-2">
+                                    {GENDER_OPTIONS.map(gender => (
+                                        <div
+                                            key={gender.value}
+                                            className={`form-check p-3 rounded border ${selectedGender === gender.value ? 'border-primary bg-primary bg-opacity-10' : ''}`}
+                                            style={{ cursor: 'pointer', transition: 'all 0.2s' }}
+                                            onClick={() => handleGenderChange(gender.value)}
+                                        >
+                                            <input
+                                                className="form-check-input"
+                                                type="radio"
+                                                name="genderSetting"
+                                                id={`setting-gender-${gender.value}`}
+                                                value={gender.value}
+                                                checked={selectedGender === gender.value}
+                                                onChange={() => handleGenderChange(gender.value)}
+                                                disabled={saving}
+                                                style={{ cursor: 'pointer' }}
+                                            />
+                                            <label
+                                                className="form-check-label d-flex align-items-center w-100"
+                                                htmlFor={`setting-gender-${gender.value}`}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <i className={`bi ${gender.icon} me-3`} style={{ fontSize: '1.5rem' }}></i>
+                                                <div className="flex-grow-1">
+                                                    <div style={{ fontWeight: '600', fontSize: '1.1rem' }}>
+                                                        {gender.label}
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <small className="text-muted d-block mt-3">
+                                    <i className="bi bi-info-circle me-1"></i>
+                                    Влияет на текст уведомлений о входе/выходе
+                                </small>
                             </div>
 
                             <hr />

@@ -1,6 +1,15 @@
 import { getColorHex } from '../utils/colors';
 
 function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser, onUserClick, connected }) {
+    const getGenderIcon = (gender) => {
+        const icons = {
+            male: 'bi-gender-male',
+            female: 'bi-gender-female',
+            unknown: 'bi-gender-ambiguous'
+        };
+        return icons[gender] || icons.male;
+    };
+
     return (
         <div className="combined-sidebar border-start d-none d-lg-flex flex-column" style={{ width: '280px', height: '100vh' }}>
             {/* Секция комнат - 30% */}
@@ -95,6 +104,11 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                         {u.nickname}
                                         {isCurrentUser && ' (я)'}
                                     </span>
+                                    <i
+                                        className={`bi ${getGenderIcon(u.gender)} ms-2`}
+                                        style={{ fontSize: '0.9rem', opacity: 0.6 }}
+                                        title={u.gender === 'male' ? 'Мужской' : u.gender === 'female' ? 'Женский' : 'Неизвестно'}
+                                    ></i>
                                 </div>
                             );
                         })
