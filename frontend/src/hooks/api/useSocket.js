@@ -1,23 +1,96 @@
-// frontend/src/hooks/useSocket.js
-import { useState, useEffect, useCallback, useRef } from "react";
+// frontend/src/hooks/api/useSocket.js - Оптимизированная версия
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import socketService from "../../services/socket.service";
+import storageService from "../../services/storage.service";
 import {
   SOCKET_EVENTS,
   TYPING_TIMEOUT,
   SYSTEM_MESSAGES_LIMIT,
-} from "../constants/config";
-import socketService from "../services/socket.service";
-import storageService from "../services/storage.service";
+} from "../../constants/config";
+import { isValidMessage } from "../../utils/typeGuards";
 
 export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
-  const [connected, setConnected] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [typing, setTyping] = useState(null);
-  const [systemMessages, setSystemMessages] = useState([]);
-  const [rooms, setRooms] = useState([]);
+  const [state, setState] = useState({
+    connected: false,
+    messages: [],
+    typing: null,
+    systemMessages: [],
+    rooms: [],
+  });
 
   const typingTimeoutRef = useRef(null);
+  const messageIdsRef = useRef(new Set());
 
-  // Connect socket
+  // Memoized setters для избежания лишних ре-рендеров
+  const setConnected = useCallback((connected) => {
+    setState((prev) => ({ ...prev, connected }));
+  }, []);
+
+  const setMessages = useCallback((messages) => {
+    setState((prev) => ({ ...prev, messages }));
+  }, []);
+
+  const addMessage = useCallback((message) => {
+    if (!isValidMessage(message)) {
+      console.warn("Invalid message received:", message);
+      return;
+    }
+
+    const messageId = message.id || message._id;
+
+    if (messageId && messageIdsRef.current.has(messageId)) {
+      console.warn("Duplicate message:", messageId);
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      messages: [...prev.messages, message],
+    }));
+
+    if (messageId) {
+      messageIdsRef.current.add(messageId);
+    }
+  }, []);
+
+  const setTyping = useCallback((nickname) => {
+    setState((prev) => ({ ...prev, typing: nickname }));
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    if (nickname) {
+      typingTimeoutRef.current = setTimeout(() => {
+        setState((prev) => ({ ...prev, typing: null }));
+      }, TYPING_TIMEOUT);
+    }
+  }, []);
+
+  const addSystemMessage = useCallback((message) => {
+    setState((prev) => ({
+      ...prev,
+      systemMessages: [
+        ...prev.systemMessages.slice(-SYSTEM_MESSAGES_LIMIT + 1),
+        { ...message, timestamp: Date.now() },
+      ],
+    }));
+  }, []);
+
+  const setRooms = useCallback((rooms) => {
+    setState((prev) => ({ ...prev, rooms }));
+  }, []);
+
+  const clearMessages = useCallback(() => {
+    messageIdsRef.current.clear();
+    setState((prev) => ({
+      ...prev,
+      messages: [],
+      systemMessages: [],
+    }));
+  }, []);
+
+  // Socket connection
   useEffect(() => {
     if (!user) return;
 
@@ -26,6 +99,7 @@ export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
 
     const socket = socketService.connect();
 
+    // Event handlers
     const handleConnect = () => {
       console.log("✅ Connected to server");
       setConnected(true);
@@ -43,61 +117,38 @@ export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
 
     const handleMessageHistory = (history) => {
       console.log("📜 Message history:", history.length);
-      socketService.clearMessageCache();
+      messageIdsRef.current.clear();
       setMessages(history);
 
       history.forEach((msg) => {
-        socketService.addMessageToCache(msg.id || msg._id);
+        const id = msg.id || msg._id;
+        if (id) messageIdsRef.current.add(id);
       });
     };
 
     const handleNewMessage = (message) => {
-      const messageId = message.id || message._id;
-
-      if (messageId && socketService.hasMessageInCache(messageId)) {
-        console.warn("⚠️ Duplicate message:", messageId);
-        return;
-      }
-
-      console.log("📨 New message:", message);
-      setMessages((prev) => [...prev, message]);
-
-      if (messageId) {
-        socketService.addMessageToCache(messageId);
-      }
+      addMessage(message);
     };
 
     const handleUserJoined = (data) => {
       console.log("👋 User joined:", data.nickname);
-      setSystemMessages((prev) => [
-        ...prev.slice(-SYSTEM_MESSAGES_LIMIT + 1),
-        {
-          ...data,
-          timestamp: Date.now(),
-        },
-      ]);
+      addSystemMessage(data);
     };
 
     const handleUserLeft = (data) => {
       console.log("👋 User left:", data.nickname);
-      setSystemMessages((prev) => [
-        ...prev.slice(-SYSTEM_MESSAGES_LIMIT + 1),
-        {
-          ...data,
-          timestamp: Date.now(),
-        },
-      ]);
+      addSystemMessage(data);
     };
 
     const handleRoomChanged = (data) => {
       console.log("🚪 Room changed:", data.room);
-      socketService.clearMessageCache();
+      clearMessages();
       setMessages(data.messages);
-      setSystemMessages([]);
       storageService.setRoom(data.room);
 
       data.messages.forEach((msg) => {
-        socketService.addMessageToCache(msg.id || msg._id);
+        const id = msg.id || msg._id;
+        if (id) messageIdsRef.current.add(id);
       });
     };
 
@@ -108,16 +159,8 @@ export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
     };
 
     const handleUserTyping = (data) => {
-      if (data.room === currentRoom) {
+      if (data.room === currentRoom && data.nickname !== user.nickname) {
         setTyping(data.nickname);
-
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-
-        typingTimeoutRef.current = setTimeout(() => {
-          setTyping(null);
-        }, TYPING_TIMEOUT);
       }
     };
 
@@ -160,25 +203,28 @@ export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
         clearTimeout(typingTimeoutRef.current);
       }
 
-      socket.off(SOCKET_EVENTS.CONNECT, handleConnect);
-      socket.off(SOCKET_EVENTS.AUTHENTICATED, handleAuthenticated);
-      socket.off(SOCKET_EVENTS.AUTH_ERROR, handleAuthError);
-      socket.off(SOCKET_EVENTS.MESSAGE_HISTORY, handleMessageHistory);
-      socket.off(SOCKET_EVENTS.NEW_MESSAGE, handleNewMessage);
-      socket.off(SOCKET_EVENTS.USER_JOINED, handleUserJoined);
-      socket.off(SOCKET_EVENTS.USER_LEFT, handleUserLeft);
-      socket.off(SOCKET_EVENTS.ROOM_CHANGED, handleRoomChanged);
-      socket.off(SOCKET_EVENTS.ROOMS_UPDATE, handleRoomsUpdate);
-      socket.off(SOCKET_EVENTS.USER_TYPING, handleUserTyping);
-      socket.off(SOCKET_EVENTS.PRIVATE_MESSAGE, handlePrivateMessage);
-      socket.off(SOCKET_EVENTS.UNREAD_COUNT_UPDATE, handleUnreadCountUpdate);
-      socket.off(SOCKET_EVENTS.DISCONNECT, handleDisconnect);
-      socket.off(SOCKET_EVENTS.RECONNECT, handleReconnect);
+      // Cleanup listeners
+      Object.values(SOCKET_EVENTS).forEach((event) => {
+        socket.off(event);
+      });
 
       socketService.disconnect();
     };
-  }, [user, currentRoom, onLogout, onUnreadUpdate]);
+  }, [
+    user,
+    currentRoom,
+    onLogout,
+    onUnreadUpdate,
+    setConnected,
+    setMessages,
+    addMessage,
+    setTyping,
+    addSystemMessage,
+    setRooms,
+    clearMessages,
+  ]);
 
+  // Memoized methods
   const sendMessage = useCallback((messageData) => {
     socketService.sendMessage(messageData);
   }, []);
@@ -191,14 +237,14 @@ export const useSocket = (user, currentRoom, onLogout, onUnreadUpdate) => {
     socketService.sendTyping();
   }, []);
 
-  return {
-    connected,
-    messages,
-    typing,
-    systemMessages,
-    rooms,
-    sendMessage,
-    joinRoom,
-    sendTyping,
-  };
+  // Memoized return value
+  return useMemo(
+    () => ({
+      ...state,
+      sendMessage,
+      joinRoom,
+      sendTyping,
+    }),
+    [state, sendMessage, joinRoom, sendTyping]
+  );
 };

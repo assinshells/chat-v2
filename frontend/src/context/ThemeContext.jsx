@@ -1,6 +1,9 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+// frontend/src/contexts/ThemeContext.jsx - Оптимизированный контекст
+import { createContext, useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import PropTypes from 'prop-types';
+import { STORAGE_KEYS } from '../constants/config';
 
-const ThemeContext = createContext();
+const ThemeContext = createContext(null);
 
 export const useTheme = () => {
     const context = useContext(ThemeContext);
@@ -12,22 +15,31 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(() => {
-        const savedTheme = localStorage.getItem('chatTheme');
-        return savedTheme || 'light';
+        return localStorage.getItem(STORAGE_KEYS.THEME) || 'light';
     });
 
     useEffect(() => {
         document.documentElement.setAttribute('data-bs-theme', theme);
-        localStorage.setItem('chatTheme', theme);
+        localStorage.setItem(STORAGE_KEYS.THEME, theme);
     }, [theme]);
 
-    const toggleTheme = () => {
+    const toggleTheme = useCallback(() => {
         setTheme(prev => prev === 'light' ? 'dark' : 'light');
-    };
+    }, []);
+
+    const value = useMemo(() => ({
+        theme,
+        toggleTheme,
+        isDark: theme === 'dark',
+    }), [theme, toggleTheme]);
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={value}>
             {children}
         </ThemeContext.Provider>
     );
+};
+
+ThemeProvider.propTypes = {
+    children: PropTypes.node.isRequired,
 };

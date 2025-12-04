@@ -1,38 +1,59 @@
 // frontend/src/pages/Auth/Login.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { useRooms } from '../../hooks/useRooms';
-import { DEFAULT_ROOM } from '../../constants/config';
+import { useAuth } from '../../hooks/api/useAuth';
+import { useForm } from '../../hooks/ui/useForm';
+import { useRooms } from '../../hooks/api/useRooms';
+import { Button, Input, Select, Alert } from '../../components/ui';
 import AuthLayout from '../../layouts/AuthLayout';
+import { DEFAULT_ROOM } from '../../constants/config';
+import { validateLogin } from '../../utils/validators';
 
 function Login() {
-    const [formData, setFormData] = useState({
-        login: '',
-        password: '',
-        room: DEFAULT_ROOM
-    });
-
     const { login, loading, error, setError } = useAuth();
     const { rooms } = useRooms();
 
-    const handleChange = useCallback((e) => {
-        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-        setError('');
-    }, [setError]);
+    const {
+        values,
+        errors,
+        touched,
+        handleChange,
+        handleBlur,
+        handleSubmit,
+    } = useForm(
+        {
+            login: '',
+            password: '',
+            room: DEFAULT_ROOM,
+        },
+        validateLogin
+    );
 
-    const handleSubmit = useCallback(async (e) => {
-        e.preventDefault();
+    // Очистка ошибки при изменении полей
+    useEffect(() => {
+        if (error) setError(null);
+    }, [values, error, setError]);
 
+    const onSubmit = async (formValues) => {
         try {
             await login(
-                { login: formData.login, password: formData.password },
-                formData.room
+                {
+                    login: formValues.login,
+                    password: formValues.password
+                },
+                formValues.room
             );
         } catch (err) {
-            console.error('Login failed:', err);
+            // Ошибка уже обработана в хуке
         }
-    }, [formData, login]);
+    };
+
+    const roomOptions = rooms.length > 0
+        ? rooms.map(room => ({
+            value: room.name,
+            label: `# ${room.displayName}${room.description ? ` - ${room.description}` : ''}`,
+        }))
+        : [{ value: DEFAULT_ROOM, label: '# Главная' }];
 
     return (
         <AuthLayout>
@@ -40,69 +61,54 @@ function Login() {
                 <div className="card-body p-5">
                     <h2 className="text-center mb-4">🔐 Вход в чат</h2>
 
-                    {error && (
-                        <div className="alert alert-danger" role="alert">
-                            {error}
-                        </div>
-                    )}
+                    {error && <Alert type="danger">{error}</Alert>}
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="mb-3">
-                            <label className="form-label">Никнейм или Email</label>
-                            <input
-                                type="text"
-                                className="form-control"
-                                name="login"
-                                value={formData.login}
-                                onChange={handleChange}
-                                required
-                                autoFocus
-                            />
-                        </div>
+                    <form onSubmit={handleSubmit(onSubmit)}>
+                        <Input
+                            label="Никнейм или Email"
+                            name="login"
+                            value={values.login}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            error={errors.login}
+                            touched={touched.login}
+                            required
+                            autoFocus
+                        />
 
-                        <div className="mb-3">
-                            <label className="form-label">Пароль</label>
-                            <input
-                                type="password"
-                                className="form-control"
-                                name="password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                required
-                            />
-                        </div>
+                        <Input
+                            label="Пароль"
+                            name="password"
+                            type="password"
+                            value={values.password}
+                            onChange={handleChange}
+                            onBlur={handleBlur}
+                            error={errors.password}
+                            touched={touched.password}
+                            required
+                        />
 
-                        <div className="mb-3">
-                            <label className="form-label">🚪 Выберите комнату</label>
-                            <select
-                                className="form-select"
-                                name="room"
-                                value={formData.room}
-                                onChange={handleChange}
-                            >
-                                {rooms.length > 0 ? (
-                                    rooms.map((room) => (
-                                        <option key={room.name} value={room.name}>
-                                            # {room.displayName}
-                                            {room.description && ` - ${room.description}`}
-                                        </option>
-                                    ))
-                                ) : (
-                                    <option value={DEFAULT_ROOM}># Главная</option>
-                                )}
-                            </select>
-                            <small className="text-muted">
-                                Вы можете переключаться между комнатами в любое время
-                            </small>
-                        </div>
+                        <Select
+                            label="🚪 Выберите комнату"
+                            name="room"
+                            value={values.room}
+                            onChange={handleChange}
+                            options={roomOptions}
+                        />
+                        <small className="text-muted d-block mb-3">
+                            Вы можете переключаться между комнатами в любое время
+                        </small>
 
-                        <button
+                        <Button
                             type="submit"
-                            className="btn btn-primary w-100 mb-3"
+                            variant="primary"
+                            fullWidth
+                            loading={loading}
                             disabled={loading}
+                            className="mb-3"
                         >
-                            {loading ? 'Вход...' : 'Войти в чат'}
-                        </button>
+                            Войти в чат
+                        </Button>
                     </form>
 
                     <div className="text-center mb-2">
@@ -115,8 +121,8 @@ function Login() {
 
                     <div className="text-center">
                         <p className="mb-2">Нет аккаунта?</p>
-                        <Link to="/register" className="btn btn-outline-primary">
-                            Зарегистрироваться
+                        <Link to="/register">
+                            <Button variant="outline-primary">Зарегистрироваться</Button>
                         </Link>
                     </div>
                 </div>
