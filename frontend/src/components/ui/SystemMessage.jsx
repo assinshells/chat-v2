@@ -1,21 +1,32 @@
-import { getColorHex } from '../utils/colors';
+// frontend/src/components/ui/SystemMessage.jsx
+import { memo, useCallback, useMemo } from 'react';
+import { getColorHex } from '../../utils/colors';
 
-function SystemMessage({ data, onUserClick }) {
-    const userColor = getColorHex(data.messageColor || 'black');
+const SystemMessage = memo(function SystemMessage({ data, onUserClick }) {
+    const userColor = useMemo(() =>
+        getColorHex(data.messageColor || 'black'),
+        [data.messageColor]
+    );
+
+    const handleClick = useCallback(() => {
+        if (onUserClick) {
+            onUserClick({
+                userId: data.userId,
+                nickname: data.nickname
+            });
+        }
+    }, [data.userId, data.nickname, onUserClick]);
 
     return (
         <div className="text-center my-3">
             <small className="text-muted">
                 <span
-                    onClick={() => onUserClick && onUserClick({
-                        userId: data.userId,
-                        nickname: data.nickname
-                    })}
+                    onClick={handleClick}
                     style={{
                         color: userColor,
                         fontWeight: '600',
                         cursor: onUserClick ? 'pointer' : 'default',
-                        textDecoration: onUserClick ? 'none' : 'none'
+                        textDecoration: 'none'
                     }}
                     onMouseEnter={(e) => {
                         if (onUserClick) {
@@ -38,6 +49,6 @@ function SystemMessage({ data, onUserClick }) {
             </small>
         </div>
     );
-}
+});
 
 export default SystemMessage;

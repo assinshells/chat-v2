@@ -1,4 +1,7 @@
-function ChatInput({
+// frontend/src/components/ui/ChatInput.jsx
+import { memo, useCallback } from 'react';
+
+const ChatInput = memo(function ChatInput({
     inputMessage,
     setInputMessage,
     selectedUser,
@@ -9,6 +12,16 @@ function ChatInput({
     onInputChange,
     onOpenPrivateMessage
 }) {
+    const handleOpenPrivate = useCallback(() => {
+        if (selectedUser) {
+            onOpenPrivateMessage(selectedUser);
+        }
+    }, [selectedUser, onOpenPrivateMessage]);
+
+    const handleClearSelection = useCallback(() => {
+        setSelectedUser(null);
+    }, [setSelectedUser]);
+
     return (
         <div className="chat-input-section p-3 p-lg-4 border-top mb-0">
             <div className="row g-0">
@@ -21,7 +34,7 @@ function ChatInput({
                         <div className="d-flex gap-2">
                             <button
                                 className="btn btn-sm btn-success"
-                                onClick={() => onOpenPrivateMessage(selectedUser)}
+                                onClick={handleOpenPrivate}
                                 title="Отправить личное сообщение"
                             >
                                 <i className="bi bi-envelope-fill"></i>
@@ -29,13 +42,14 @@ function ChatInput({
                             </button>
                             <button
                                 className="btn btn-sm btn-close"
-                                onClick={() => setSelectedUser(null)}
+                                onClick={handleClearSelection}
                                 aria-label="Отменить"
                                 title="Отменить"
                             ></button>
                         </div>
                     </div>
                 )}
+
                 <form onSubmit={onSendMessage}>
                     <div className="input-group">
                         <input
@@ -61,12 +75,14 @@ function ChatInput({
                             <span className="d-none d-md-inline ms-1">Отправить</span>
                         </button>
                     </div>
+
                     {!connected && (
                         <small className="text-danger mt-1 d-block">
                             <i className="bi bi-exclamation-triangle me-1"></i>
                             Нет соединения с сервером
                         </small>
                     )}
+
                     {selectedUser && (
                         <small className="text-muted mt-1 d-block">
                             <i className="bi bi-info-circle me-1"></i>
@@ -77,6 +93,6 @@ function ChatInput({
             </div>
         </div>
     );
-}
+});
 
 export default ChatInput;

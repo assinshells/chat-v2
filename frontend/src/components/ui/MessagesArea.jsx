@@ -1,35 +1,43 @@
-import { useRef, useEffect } from 'react';
+// frontend/src/components/ui/MessagesArea.jsx
+import { useRef, useEffect, useMemo, memo } from 'react';
 import MessageItem from './MessageItem';
 import SystemMessage from './SystemMessage';
 
-function MessagesArea({ messages, typing, user, onUserClick, onTimeClick, systemMessages }) {
+const MessagesArea = memo(function MessagesArea({
+    messages,
+    typing,
+    user,
+    onUserClick,
+    onTimeClick,
+    systemMessages
+}) {
     const messagesEndRef = useRef(null);
 
-    useEffect(() => {
-        scrollToBottom();
+    // Combine and sort messages
+    const allMessages = useMemo(() => {
+        const combined = [...messages];
+
+        if (systemMessages?.length > 0) {
+            systemMessages.forEach(sysMsg => {
+                combined.push({
+                    ...sysMsg,
+                    isSystem: true,
+                    timestamp: sysMsg.timestamp || Date.now()
+                });
+            });
+        }
+
+        return combined.sort((a, b) =>
+            new Date(a.timestamp) - new Date(b.timestamp)
+        );
     }, [messages, systemMessages]);
 
-    const scrollToBottom = () => {
+    useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
-    // Объединяем обычные сообщения и системные уведомления
-    const allMessages = [...messages];
-    if (systemMessages && systemMessages.length > 0) {
-        systemMessages.forEach(sysMsg => {
-            allMessages.push({
-                ...sysMsg,
-                isSystem: true,
-                timestamp: sysMsg.timestamp || Date.now()
-            });
-        });
-    }
-
-    // Сортируем по времени
-    allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }, [allMessages]);
 
     return (
-        <div className="chat-conversation p-3 p-lg-4">
+        <div className="chat-conversation p-3 p-lg-4" style={{ overflowY: 'auto', flex: 1 }}>
             {allMessages.length === 0 ? (
                 <div className="text-center text-muted mt-5">
                     <i className="bi bi-chat-left-text" style={{ fontSize: '3rem', opacity: 0.3 }}></i>
@@ -62,7 +70,11 @@ function MessagesArea({ messages, typing, user, onUserClick, onTimeClick, system
             {typing && (
                 <div className="text-muted small mb-2">
                     <div className="d-flex align-items-center">
-                        <div className="spinner-grow spinner-grow-sm me-2" role="status" style={{ width: '0.5rem', height: '0.5rem' }}>
+                        <div
+                            className="spinner-grow spinner-grow-sm me-2"
+                            role="status"
+                            style={{ width: '0.5rem', height: '0.5rem' }}
+                        >
                             <span className="visually-hidden">Печатает...</span>
                         </div>
                         <em>{typing} печатает...</em>
@@ -73,6 +85,6 @@ function MessagesArea({ messages, typing, user, onUserClick, onTimeClick, system
             <div ref={messagesEndRef} />
         </div>
     );
-}
+});
 
 export default MessagesArea;

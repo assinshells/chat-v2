@@ -1,19 +1,48 @@
-import { getColorHex } from '../utils/colors';
+// frontend/src/components/ui/CombinedSidebar.jsx
+import { memo, useCallback, useMemo } from 'react';
+import { getColorHex } from '../../utils/colors';
+import { getGenderIcon } from '../../utils/formatters';
 
-function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser, onUserClick, connected }) {
-    const getGenderIcon = (gender) => {
-        const icons = {
-            male: 'bi-gender-male',
-            female: 'bi-gender-female',
-            unknown: 'bi-gender-ambiguous'
-        };
-        return icons[gender] || icons.male;
-    };
+const CombinedSidebar = memo(function CombinedSidebar({
+    rooms,
+    currentRoom,
+    onRoomChange,
+    users,
+    currentUser,
+    onUserClick
+}) {
+    const handleRoomClick = useCallback((roomName) => {
+        if (roomName !== currentRoom) {
+            onRoomChange(roomName);
+        }
+    }, [currentRoom, onRoomChange]);
+
+    const handleUserClick = useCallback((user) => {
+        if (user.userId !== currentUser.id) {
+            onUserClick(user);
+        }
+    }, [currentUser.id, onUserClick]);
+
+    // Memoize sorted users
+    const sortedUsers = useMemo(() => {
+        return [...users].sort((a, b) => {
+            // Current user always first
+            if (a.userId === currentUser.id) return -1;
+            if (b.userId === currentUser.id) return 1;
+            return a.nickname.localeCompare(b.nickname);
+        });
+    }, [users, currentUser.id]);
 
     return (
-        <div className="combined-sidebar border-start d-none d-lg-flex flex-column" style={{ width: '280px', height: '100vh' }}>
-            {/* Секция комнат - 30% */}
-            <div className="rooms-section border-bottom" style={{ height: '30%', overflow: 'auto' }}>
+        <div
+            className="combined-sidebar border-start d-none d-lg-flex flex-column"
+            style={{ width: '280px', height: '100vh' }}
+        >
+            {/* Rooms Section - 30% */}
+            <div
+                className="rooms-section border-bottom"
+                style={{ height: '30%', overflow: 'auto' }}
+            >
                 <div className="rooms-list">
                     {rooms.length > 0 ? (
                         rooms.map((room) => {
@@ -22,8 +51,8 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                             return (
                                 <div
                                     key={room.name}
-                                    className={`room-item p-1`}
-                                    onClick={() => onRoomChange(room.name)}
+                                    className={`room-item p-3 ${isActive ? 'active' : ''}`}
+                                    onClick={() => handleRoomClick(room.name)}
                                     title={room.description || room.displayName}
                                     style={{
                                         cursor: "pointer",
@@ -32,7 +61,7 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                 >
                                     <div className="d-flex justify-content-between align-items-center">
                                         <div className="flex-grow-1">
-                                            <div className={`fw-bold ${isActive ? "text-muted" : ""}`}>
+                                            <div className={`fw-bold ${isActive ? "text-white" : ""}`}>
                                                 <i className="bi bi-hash me-1"></i>
                                                 {room.displayName || room.name}
                                             </div>
@@ -60,8 +89,11 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                 </div>
             </div>
 
-            {/* Секция пользователей - 70% */}
-            <div className="users-section" style={{ height: '70%', overflow: 'auto' }}>
+            {/* Users Section - 70% */}
+            <div
+                className="users-section"
+                style={{ height: '70%', overflow: 'auto' }}
+            >
                 <div className="p-3 border-bottom">
                     <h6 className="mb-0">
                         <i className="bi bi-people-fill me-2"></i>
@@ -70,8 +102,8 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                 </div>
 
                 <div className="users-list p-3">
-                    {users.length > 0 ? (
-                        users.map((u) => {
+                    {sortedUsers.length > 0 ? (
+                        sortedUsers.map((u) => {
                             const isCurrentUser = u.userId === currentUser.id;
                             const userColor = getColorHex(u.messageColor || 'black');
 
@@ -79,7 +111,7 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                 <div
                                     key={u.socketId}
                                     className={`user-item d-flex align-items-center mb-2 p-2 rounded ${!isCurrentUser ? 'clickable-user' : ''}`}
-                                    onClick={() => !isCurrentUser && onUserClick(u)}
+                                    onClick={() => handleUserClick(u)}
                                     title={!isCurrentUser ? 'Кликните, чтобы отправить сообщение' : ''}
                                     style={{
                                         cursor: !isCurrentUser ? 'pointer' : 'default',
@@ -97,9 +129,7 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                     ></div>
                                     <span
                                         className={isCurrentUser ? 'fw-bold' : ''}
-                                        style={{
-                                            color: userColor
-                                        }}
+                                        style={{ color: userColor }}
                                     >
                                         {u.nickname}
                                         {isCurrentUser && ' (я)'}
@@ -107,7 +137,11 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
                                     <i
                                         className={`bi ${getGenderIcon(u.gender)} ms-2`}
                                         style={{ fontSize: '0.9rem', opacity: 0.6 }}
-                                        title={u.gender === 'male' ? 'Мужской' : u.gender === 'female' ? 'Женский' : 'Неизвестно'}
+                                        title={
+                                            u.gender === 'male' ? 'Мужской' :
+                                                u.gender === 'female' ? 'Женский' :
+                                                    'Неизвестно'
+                                        }
                                     ></i>
                                 </div>
                             );
@@ -122,6 +156,6 @@ function CombinedSidebar({ rooms, currentRoom, onRoomChange, users, currentUser,
             </div>
         </div>
     );
-}
+});
 
 export default CombinedSidebar;

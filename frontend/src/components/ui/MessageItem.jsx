@@ -1,30 +1,50 @@
-import { memo } from 'react';
-import { getColorHex } from '../utils/colors';
+// frontend/src/components/ui/MessageItem.jsx
+import { memo, useMemo } from 'react';
+import { getColorHex } from '../../utils/colors';
+import { formatTime } from '../../utils/formatters';
 
-const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserClick, onTimeClick }) {
-    const formatTime = (timestamp) => {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('ru-RU', {
-            hour: '2-digit',
-            minute: '2-digit'
+const MessageItem = memo(function MessageItem({
+    message,
+    isOwnMessage,
+    onUserClick,
+    onTimeClick
+}) {
+    const nicknameColor = useMemo(() =>
+        isOwnMessage ? '#dc3545' : '#000000',
+        [isOwnMessage]
+    );
+
+    const messageTextColor = useMemo(() =>
+        getColorHex(message.messageColor || 'black'),
+        [message.messageColor]
+    );
+
+    const formattedTime = useMemo(() =>
+        formatTime(message.timestamp),
+        [message.timestamp]
+    );
+
+    const handleUserClick = useMemo(() => {
+        if (isOwnMessage) return undefined;
+        return () => onUserClick({
+            userId: message.userId,
+            nickname: message.nickname
         });
-    };
+    }, [isOwnMessage, message.userId, message.nickname, onUserClick]);
 
-    // Цвет никнейма: мой - красный, остальные - чёрный
-    const nicknameColor = isOwnMessage ? '#dc3545' : '#000000';
-
-    // Цвет текста сообщения: выбранный цвет пользователя
-    const messageTextColor = getColorHex(message.messageColor || 'black');
+    const handleTimeClick = useMemo(() =>
+        () => onTimeClick(message.timestamp),
+        [message.timestamp, onTimeClick]
+    );
 
     return (
         <ul className="list-unstyled mb-0">
             <li>
                 <div className="message-row mb-2">
                     <div className="conversation-list">
-                        {/* Время (кликабельное) */}
                         <span
                             className="message-time text-muted me-2"
-                            onClick={() => onTimeClick(message.timestamp)}
+                            onClick={handleTimeClick}
                             title="Кликните, чтобы вставить время"
                             style={{
                                 cursor: 'pointer',
@@ -32,17 +52,12 @@ const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserCli
                                 minWidth: '45px'
                             }}
                         >
-                            {formatTime(message.timestamp)}
+                            {formattedTime}
                         </span>
 
-                        {/* Никнейм (кликабельный если не мой) */}
                         <span
                             className={`message-nickname fw-bold me-2 ${!isOwnMessage ? 'clickable-nickname' : 'my-nickname'}`}
-                            onClick={() => {
-                                if (!isOwnMessage) {
-                                    onUserClick({ userId: message.userId, nickname: message.nickname });
-                                }
-                            }}
+                            onClick={handleUserClick}
                             title={!isOwnMessage ? 'Кликните, чтобы ответить' : 'Вы'}
                             style={{
                                 cursor: !isOwnMessage ? 'pointer' : 'default',
@@ -54,13 +69,12 @@ const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserCli
                             {isOwnMessage && ' (я)'}:
                         </span>
 
-                        {/* Адресат (если есть) */}
                         {message.toNickname && (
                             <span
                                 className="me-2"
                                 style={{
                                     fontSize: '0.9rem',
-                                    color: '#000000' // Адресат всегда чёрным
+                                    color: '#000000'
                                 }}
                                 title={`Ответ для ${message.toNickname}`}
                             >
@@ -69,7 +83,6 @@ const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserCli
                             </span>
                         )}
 
-                        {/* Текст сообщения */}
                         <span
                             className="message-text"
                             style={{
@@ -85,7 +98,6 @@ const MessageItem = memo(function MessageItem({ message, isOwnMessage, onUserCli
         </ul>
     );
 }, (prevProps, nextProps) => {
-    // Сравнение пропсов для оптимизации
     return (
         prevProps.message.id === nextProps.message.id &&
         prevProps.isOwnMessage === nextProps.isOwnMessage
